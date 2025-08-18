@@ -1,0 +1,490 @@
+<!doctype html>
+<html lang="en">
+<head>
+	<meta charset="utf-8" />
+	<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1.0, user-scalable=no" />
+	<title>Dual Pads – iPhone Ready (Overlay Fixed)</title>
+	<style>
+		:root { --bg:#0e0f12; --panel:#2b2f36; --panel2:#22252a; --text:#cfd6e4; --grid:#ffffff12; }
+		html, body { height:100%; margin:0; background:var(--bg); color:var(--text); font-family:-apple-system, system-ui, Segoe UI, Roboto, Helvetica, Arial, sans-serif; overscroll-behavior:none; }
+		body {
+			height:100dvh; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:10px;
+			-webkit-user-select:none; user-select:none; -webkit-touch-callout:none; -webkit-tap-highlight-color:transparent;
+		}
+		.stage { width:100%; max-width:920px; padding:8px 10px; box-sizing:border-box; display:flex; justify-content:center; align-items:center; gap:12px; }
+		.pad {
+			position:relative; width:min(40vw, 340px); height:min(64dvh, 480px); min-width:120px; min-height:260px;
+			background:linear-gradient(180deg, var(--panel) 0%, var(--panel2) 100%); border-radius:16px;
+			box-shadow:inset 0 0 0 1px rgba(255,255,255,0.07), 0 10px 24px rgba(0,0,0,0.45);
+			touch-action:none; overflow:hidden;
+		}
+		.pad::after {
+			content:""; position:absolute; inset:0;
+			background:
+				linear-gradient(var(--grid) 1px, transparent 1px) 0 0 / 100% 12.5%,
+				linear-gradient(90deg, var(--grid) 1px, transparent 1px) 50% 0 / 50% 100%,
+				linear-gradient(90deg, var(--grid) 1px, transparent 1px) 0 0 / 50% 100%;
+			pointer-events:none;
+		}
+		.center-divider { position:absolute; top:0; bottom:0; left:50%; width:2px; background:#ffffff33; pointer-events:none; }
+		.string-label { position:absolute; top:8px; font-size:12px; opacity:0.8; pointer-events:none; }
+		.string-label.left { left:12px; }
+		.string-label.right { right:12px; }
+		.indicator {
+			position:absolute; width:16px; height:16px; border-radius:999px;
+			background:radial-gradient(circle at 35% 35%, #ffffff, #e9edf5);
+			box-shadow:0 6px 14px rgba(0,0,0,0.45), inset 0 0 0 1px rgba(0,0,0,0.08);
+			transform:translate(-50%, -50%); pointer-events:none;
+		}
+		.hud {
+			position:absolute; top:-8px; left:50%; transform:translate(-50%, -175%);
+			font-size:16px; font-weight:600; font-variant-numeric:tabular-nums;
+			background:rgba(255,255,255,0.10); border:1px solid rgba(255,255,255,0.20);
+			padding:4px 10px; border-radius:10px; pointer-events:none; opacity:0.95; white-space:nowrap; z-index:10;
+		}
+		.vol-meter { position:absolute; right:8px; bottom:8px; top:8px; width:10px; background:rgba(255,255,255,0.06); border:1px solid rgba(255,255,255,0.15); border-radius:6px; overflow:hidden; }
+		.vol-fill { position:absolute; left:0; right:0; bottom:0; height:0%; background:linear-gradient(180deg, #8bd3ff, #3aa0ff); }
+		.controls { display:flex; gap:10px; }
+		button { background:#2f6feb; color:white; border:none; padding:8px 12px; border-radius:10px; cursor:pointer; touch-action:manipulation; }
+		button:active { transform:translateY(1px); }
+
+		/* iOS audio unlock overlay */
+		.unlock {
+			position:fixed; inset:0; display:flex; align-items:center; justify-content:center;
+			background:rgba(0,0,0,0.6); backdrop-filter:blur(4px); z-index:9999;
+		}
+		.unlock.hidden { display:none; }
+		.unlock button {
+			font-size:16px; padding:12px 16px; border-radius:12px; border:1px solid #ffffff55;
+			background:#1f6feb; color:#fff;
+		}
+	</style>
+</head>
+<body>
+	<div class="stage">
+		<div class="pad" id="padLeft">
+			<div class="center-divider"></div>
+			<div class="string-label left">String A</div>
+			<div class="string-label right">String B</div>
+			<div class="indicator" id="leftDot0" style="left:25%; top:50%;"></div>
+			<div class="indicator" id="leftDot1" style="left:75%; top:50%;"></div>
+		</div>
+
+		<div class="pad" id="padRight">
+			<div class="hud" id="hud">Vel: 0.00 | Vol: 0.00 | Harm: 0.50</div>
+			<div class="vol-meter"><div class="vol-fill" id="volFill"></div></div>
+			<div class="indicator" id="rightDot" style="left:50%; top:50%;"></div>
+		</div>
+	</div>
+
+	<div class="controls">
+		<button id="testToneBtn">Test tone (1s)</button>
+	</div>
+
+	<!-- iOS unlock -->
+	<div class="unlock" id="unlock">
+		<button id="unlockBtn" type="button">Tap to enable audio</button>
+	</div>
+
+	<script>
+		// ---------- Utils ----------
+		function clamp01(v) { return Math.min(1, Math.max(0, v)); }
+		function getPadXY(pad, clientX, clientY) {
+			const r = pad.getBoundingClientRect();
+			const x = clamp01((clientX - r.left) / r.width);
+			const y = clamp01((clientY - r.top) / r.height);
+			return { x, y: 1 - y };
+		}
+		function lerp(a,b,t){ return a + (b-a)*t; }
+
+		// ---------- DOM ----------
+		const leftPad = document.getElementById('padLeft');
+		const rightPad = document.getElementById('padRight');
+		const leftDots = [document.getElementById('leftDot0'), document.getElementById('leftDot1')];
+		const rightDot = document.getElementById('rightDot');
+		const hudEl = document.getElementById('hud');
+		const volFillEl = document.getElementById('volFill');
+		const testToneBtn = document.getElementById('testToneBtn');
+		const unlock = document.getElementById('unlock');
+		const unlockBtn = document.getElementById('unlockBtn');
+
+		// ---------- Left rectangles ----------
+		function rectInfoFromClient(e) {
+			const p = getPadXY(leftPad, e.clientX, e.clientY);
+			const s = p.x < 0.5 ? 0 : 1;
+			const localX = s === 0 ? (p.x / 0.5) : ((p.x - 0.5) / 0.5);
+			return { s, localX: clamp01(localX), y: p.y, padX: p.x };
+		}
+		function setLeftDotByLocal(s, localX, y) {
+			const leftPct = s === 0 ? (localX * 50) : (50 + localX * 50);
+			leftDots[s].style.left = leftPct + '%';
+			leftDots[s].style.top = ((1 - y) * 100) + '%';
+		}
+		function setRightDot(x, y) { rightDot.style.left = (x * 100) + '%'; rightDot.style.top = ((1 - y) * 100) + '%'; }
+
+		// ---------- Audio ----------
+		let audioCtx = null, audioStarted = false, unlocked = false;
+		let masterGain = null, activeGate = null, toneBus = null;
+
+		function makeVoiceObj() {
+			return {
+				tri:null, sine:null, saw:null,
+				triMix:null, sineMix:null, sawMix:null,
+				panNode:null, eq1:null, eq2:null, smallDelay:null,
+				loudnessGain:null, balGain:null, stringGate:null
+			};
+		}
+		const voiceA = makeVoiceObj();
+		const voiceB = makeVoiceObj();
+
+		let reedDrive=null, reedShaper=null, reedBias=null;
+		let notch=null, formant1=null, formant2=null, lowpass=null, filterSum=null;
+
+		let noiseBuf=null, noiseSrc=null, breathHP=null, breathBP=null, breathGain=null;
+
+		let vibLFO=null, vibDepthA=null, vibDepthB=null;
+
+		const MIN_FREQ=110, OCTAVES=3.0;
+		let freqA=220, freqB=330, currentHarm=0.5;
+
+		const VELOCITY_NORM_MAX=6.0;
+		let rightVelocity=0.0, lastRightTime=null, lastRightY=0.5;
+
+		const stringActiveCount=[0,0];
+		const frozen=[false,false];
+		const lastTapTime=[0,0];
+		const DOUBLE_TAP_MS=280;
+
+		const stringLocalX=[0.5,0.5];
+
+		function ensureCtx() { if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)(); }
+
+		function createNoiseBuffer(ctx, seconds=2) {
+			const len = Math.floor(seconds * ctx.sampleRate);
+			const buf = ctx.createBuffer(1, len, ctx.sampleRate);
+			const d = buf.getChannelData(0);
+			let last = 0;
+			for (let i=0;i<len;i++){ const white=Math.random()*2-1; last=(last*0.98)+(white*0.02); d[i]=last; }
+			return buf;
+		}
+		function createReedCurve(samples=2048, k=2.2) {
+			const curve = new Float32Array(samples);
+			for (let i=0;i<samples;i++){ const x=(i/(samples-1))*2-1; curve[i]=Math.tanh(k*(x+0.02))*0.9; }
+			return curve;
+		}
+
+		function initVoice(v, panValue, cfg) {
+			v.tri=audioCtx.createOscillator(); v.tri.type='triangle';
+			v.sine=audioCtx.createOscillator(); v.sine.type='sine';
+			v.saw=audioCtx.createOscillator(); v.saw.type='sawtooth';
+
+			v.triMix=audioCtx.createGain(); v.triMix.gain.value=cfg.tri;
+			v.sineMix=audioCtx.createGain(); v.sineMix.gain.value=cfg.sine;
+			v.sawMix=audioCtx.createGain(); v.sawMix.gain.value=cfg.saw;
+
+			v.panNode=audioCtx.createStereoPanner(); v.panNode.pan.value=panValue;
+
+			v.eq1=audioCtx.createBiquadFilter(); v.eq1.type=cfg.eq1Type; v.eq1.frequency.value=cfg.eq1Freq; v.eq1.gain.value=cfg.eq1Gain; v.eq1.Q.value=cfg.eq1Q ?? 0.7;
+			v.eq2=audioCtx.createBiquadFilter(); v.eq2.type=cfg.eq2Type; v.eq2.frequency.value=cfg.eq2Freq; v.eq2.gain.value=cfg.eq2Gain; v.eq2.Q.value=cfg.eq2Q ?? 0.7;
+
+			v.smallDelay=audioCtx.createDelay(0.02); v.smallDelay.delayTime.value=cfg.delay;
+
+			v.loudnessGain=audioCtx.createGain(); v.loudnessGain.gain.value=1.0;
+			v.balGain=audioCtx.createGain(); v.balGain.gain.value=0.5;
+			v.stringGate=audioCtx.createGain(); v.stringGate.gain.value=0.0;
+
+			v.tri.connect(v.triMix).connect(v.panNode);
+			v.sine.connect(v.sineMix).connect(v.panNode);
+			v.saw.connect(v.sawMix).connect(v.panNode);
+			v.panNode.connect(v.eq1).connect(v.eq2).connect(v.smallDelay).connect(v.loudnessGain).connect(v.balGain).connect(v.stringGate).connect(toneBus);
+		}
+
+		function setupAudio() {
+			if (audioStarted) return;
+			ensureCtx();
+
+			masterGain = audioCtx.createGain(); masterGain.gain.value = 0.0;
+			activeGate = audioCtx.createGain(); activeGate.gain.value = 0.0;
+			activeGate.connect(masterGain).connect(audioCtx.destination);
+
+			toneBus = audioCtx.createGain();
+
+			initVoice(voiceA, -0.95, {
+				tri:0.48, sine:0.46, saw:0.04,
+				eq1Type:'lowshelf', eq1Freq:240, eq1Gain:+3.0,
+				eq2Type:'peaking',  eq2Freq:700, eq2Gain:-1.2, eq2Q:1.0,
+				delay:0.000
+			});
+			initVoice(voiceB, +0.95, {
+				tri:0.56, sine:0.28, saw:0.10,
+				eq1Type:'highshelf', eq1Freq:2200, eq1Gain:+2.2,
+				eq2Type:'highpass',  eq2Freq:95,   eq2Gain:0.0,
+				delay:0.004
+			});
+
+			reedDrive=audioCtx.createGain(); reedDrive.gain.value=1.5;
+			reedShaper=audioCtx.createWaveShaper(); reedShaper.curve=createReedCurve(2048,2.3);
+			reedBias=audioCtx.createConstantSource(); reedBias.offset.value=0.02; reedBias.start();
+
+			notch=audioCtx.createBiquadFilter(); notch.type='notch'; notch.frequency.value=900; notch.Q.value=1.5;
+			formant1=audioCtx.createBiquadFilter(); formant1.type='bandpass'; formant1.frequency.value=560; formant1.Q.value=2.5;
+			formant2=audioCtx.createBiquadFilter(); formant2.type='bandpass'; formant2.frequency.value=1150; formant2.Q.value=1.6;
+			lowpass=audioCtx.createBiquadFilter(); lowpass.type='lowpass'; lowpass.frequency.value=2000; lowpass.Q.value=0.8;
+			filterSum=audioCtx.createGain(); filterSum.gain.value=0.95;
+
+			toneBus.connect(reedDrive).connect(reedShaper).connect(notch);
+			reedBias.connect(reedShaper);
+			notch.connect(formant1).connect(filterSum);
+			notch.connect(formant2).connect(filterSum);
+			notch.connect(lowpass).connect(filterSum);
+
+			filterSum.connect(activeGate);
+
+			noiseBuf=createNoiseBuffer(audioCtx,2.0);
+			noiseSrc=audioCtx.createBufferSource(); noiseSrc.buffer=noiseBuf; noiseSrc.loop=true;
+			breathHP=audioCtx.createBiquadFilter(); breathHP.type='highpass'; breathHP.frequency.value=260;
+			breathBP=audioCtx.createBiquadFilter(); breathBP.type='bandpass'; breathBP.frequency.value=1500; breathBP.Q.value=1.0;
+			breathGain=audioCtx.createGain(); breathGain.gain.value=0.0;
+			noiseSrc.connect(breathHP).connect(breathBP).connect(breathGain).connect(activeGate);
+
+			vibLFO=audioCtx.createOscillator(); vibLFO.frequency.value=5.0;
+			vibDepthA=audioCtx.createGain(); vibDepthA.gain.value=1.0;
+			vibDepthB=audioCtx.createGain(); vibDepthB.gain.value=1.6;
+			vibLFO.connect(vibDepthA); vibLFO.connect(vibDepthB); vibLFO.start();
+			[voiceA.tri.frequency, voiceA.sine.frequency, voiceA.saw.frequency].forEach(p=>vibDepthA.connect(p));
+			[voiceB.tri.frequency, voiceB.sine.frequency, voiceB.saw.frequency].forEach(p=>vibDepthB.connect(p));
+
+			[voiceA, voiceB].forEach((v, idx) => {
+				const f = idx===0 ? freqA : freqB;
+				v.tri.frequency.value=f; v.sine.frequency.value=f; v.saw.frequency.value=f;
+				v.tri.start(); v.sine.start(); v.saw.start();
+			});
+			noiseSrc.start();
+
+			voiceA.balGain.gain.value=stringLocalX[0];
+			voiceB.balGain.gain.value=stringLocalX[1];
+
+			audioStarted = true;
+		}
+
+		function loudnessForFreq(f){ const factor=Math.pow(440/Math.max(60,f),0.35); return clamp01(0.75+Math.min(1.35,factor)-1.0+0.65); }
+		function applyLoudnessComp(){
+			const t=audioCtx.currentTime;
+			voiceA.loudnessGain.gain.cancelScheduledValues(t); voiceB.loudnessGain.gain.cancelScheduledValues(t);
+			voiceA.loudnessGain.gain.setTargetAtTime(loudnessForFreq(freqA),t,0.03);
+			voiceB.loudnessGain.gain.setTargetAtTime(loudnessForFreq(freqB),t,0.03);
+		}
+
+		function applyHarmonicsAndProfiles(x){
+			currentHarm = clamp01(x);
+			const t = audioCtx.currentTime;
+			const aIsHigh = freqA > freqB;
+
+			const low = { sine: lerp(0.60,0.42,currentHarm), tri: lerp(0.34,0.46,currentHarm), saw: lerp(0.02,0.06,currentHarm) };
+			const high= { sine: lerp(0.34,0.20,currentHarm), tri: lerp(0.52,0.62,currentHarm), saw: lerp(0.06,0.12,currentHarm) };
+
+			const setMix=(v,m)=>{ v.sineMix.gain.cancelScheduledValues(t); v.sineMix.gain.setTargetAtTime(m.sine,t,0.05);
+				v.triMix.gain.cancelScheduledValues(t); v.triMix.gain.setTargetAtTime(m.tri,t,0.05);
+				v.sawMix.gain.cancelScheduledValues(t); v.sawMix.gain.setTargetAtTime(m.saw,t,0.05); };
+			if (aIsHigh){ setMix(voiceA,high); setMix(voiceB,low);} else { setMix(voiceA,low); setMix(voiceB,high); }
+
+			lowpass.frequency.cancelScheduledValues(t);
+			lowpass.frequency.setTargetAtTime(lerp(1400,5000,currentHarm),t,0.06);
+			formant2.Q.cancelScheduledValues(t);
+			formant2.Q.setTargetAtTime(lerp(1.4,2.2,currentHarm),t,0.06);
+			reedDrive.gain.cancelScheduledValues(t);
+			reedDrive.gain.setTargetAtTime(lerp(1.4,2.0,currentHarm),t,0.05);
+			reedBias.offset.cancelScheduledValues(t);
+			reedBias.offset.setTargetAtTime(lerp(0.015,0.05,currentHarm),t,0.05);
+		}
+
+		function setVolumeFromVelocity(){
+			const t = audioCtx?.currentTime ?? 0;
+			const vol = clamp01(rightVelocity);
+			if (masterGain){
+				masterGain.gain.cancelScheduledValues(t);
+				masterGain.gain.setTargetAtTime(vol,t,0.015);
+			}
+			breathGain?.gain?.setTargetAtTime?.(vol*0.20,t,0.02);
+			hudEl.textContent = `Vel: ${rightVelocity.toFixed(2)} | Vol: ${vol.toFixed(2)} | Harm: ${currentHarm.toFixed(2)}`;
+			volFillEl.style.height = `${Math.round(vol*100)}%`;
+		}
+
+		function setStringFrequency(stringIndex,y){
+			const freq = MIN_FREQ*Math.pow(2,OCTAVES*clamp01(y));
+			const t = audioCtx.currentTime;
+			if (stringIndex===0){
+				freqA=freq; [voiceA.tri.frequency,voiceA.sine.frequency,voiceA.saw.frequency].forEach(p=>{ p.cancelScheduledValues(t); p.setTargetAtTime(freqA,t,0.02); });
+			}else{
+				freqB=freq; [voiceB.tri.frequency,voiceB.sine.frequency,voiceB.saw.frequency].forEach(p=>{ p.cancelScheduledValues(t); p.setTargetAtTime(freqB,t,0.02); });
+			}
+			applyLoudnessComp(); applyHarmonicsAndProfiles(currentHarm);
+		}
+		function setStringLocalVolume(stringIndex,localX){
+			stringLocalX[stringIndex]=clamp01(localX);
+			const t=audioCtx.currentTime; const g = stringIndex===0?voiceA.balGain:voiceB.balGain;
+			g.gain.cancelScheduledValues(t); g.gain.setTargetAtTime(stringLocalX[stringIndex],t,0.02);
+		}
+
+		function refreshStringGate(idx){
+			const gate = idx===0?voiceA.stringGate:voiceB.stringGate;
+			const shouldOpen = frozen[idx] || stringActiveCount[idx]>0;
+			const t=audioCtx.currentTime;
+			gate.gain.cancelScheduledValues(t); gate.gain.setTargetAtTime(shouldOpen?1.0:0.0,t,0.015);
+		}
+		function updateActiveGate(){
+			const any = (frozen[0]||stringActiveCount[0]>0)||(frozen[1]||stringActiveCount[1]>0);
+			const t=audioCtx.currentTime;
+			activeGate.gain.cancelScheduledValues(t); activeGate.gain.setTargetAtTime(any?1.0:0.0,t,0.015);
+		}
+
+		// ---------- Unlock helpers ----------
+		function maybeUnlock() {
+			if (unlocked) return;
+			try {
+				ensureCtx();
+				audioCtx.resume().then(() => {
+					setupAudio();
+					unlocked = true;
+					unlock.classList.add('hidden');
+				}).catch(() => {
+					// Even if resume rejected, hide overlay so first pad interaction can retry
+					unlock.classList.add('hidden');
+				});
+			} catch {
+				unlock.classList.add('hidden');
+			}
+		}
+
+		// ---------- Left pad (rectangles, per-string vol X, pitch Y, double-tap freeze) ----------
+		const leftPointerToString=new Map();
+		leftPad.addEventListener('pointerdown', (e)=>{
+			e.preventDefault(); maybeUnlock();
+			const now=performance.now();
+			const info=rectInfoFromClient(e); const s=info.s;
+
+			// Double-tap toggles freeze
+			if (now - lastTapTime[s] < DOUBLE_TAP_MS) {
+				frozen[s]=!frozen[s];
+				if (frozen[s]) {
+					setStringFrequency(s,info.y);
+					setStringLocalVolume(s,info.localX);
+					setLeftDotByLocal(s,info.localX,info.y);
+				}
+				refreshStringGate(s); updateActiveGate();
+				lastTapTime[s]=0;
+				return;
+			}
+			lastTapTime[s]=now;
+
+			leftPad.setPointerCapture(e.pointerId);
+			leftPointerToString.set(e.pointerId,s);
+			setStringFrequency(s,info.y);
+			setStringLocalVolume(s,info.localX);
+			setLeftDotByLocal(s,info.localX,info.y);
+			stringActiveCount[s]++; refreshStringGate(s); updateActiveGate();
+		},{passive:false});
+		leftPad.addEventListener('pointermove',(e)=>{
+			if (!leftPointerToString.has(e.pointerId)) return;
+			e.preventDefault();
+			const info=rectInfoFromClient(e); const s=leftPointerToString.get(e.pointerId);
+			setStringFrequency(s,info.y);
+			setStringLocalVolume(s,info.localX);
+			setLeftDotByLocal(s,info.localX,info.y);
+		},{passive:false});
+		leftPad.addEventListener('pointerup',(e)=>{
+			if (!leftPointerToString.has(e.pointerId)) return;
+			e.preventDefault();
+			const s=leftPointerToString.get(e.pointerId);
+			leftPointerToString.delete(e.pointerId);
+			stringActiveCount[s]=Math.max(0,stringActiveCount[s]-1);
+			refreshStringGate(s); updateActiveGate();
+		},{passive:false});
+		leftPad.addEventListener('pointercancel',(e)=>{
+			if (!leftPointerToString.has(e.pointerId)) return;
+			const s=leftPointerToString.get(e.pointerId);
+			leftPointerToString.delete(e.pointerId);
+			stringActiveCount[s]=Math.max(0,stringActiveCount[s]-1);
+			refreshStringGate(s); updateActiveGate();
+		},{passive:false});
+
+		// ---------- Right pad (velocity -> global volume; X -> harmonics) ----------
+		let rightActivePointer=null;
+		rightPad.addEventListener('pointerdown',(e)=>{
+			e.preventDefault(); maybeUnlock();
+			rightPad.setPointerCapture(e.pointerId); rightActivePointer=e.pointerId;
+			const p=getPadXY(rightPad,e.clientX,e.clientY);
+			setRightDot(p.x,p.y);
+			lastRightTime=performance.now(); lastRightY=p.y; rightVelocity=0.0;
+			applyHarmonicsAndProfiles(p.x); setVolumeFromVelocity();
+		},{passive:false});
+		rightPad.addEventListener('pointermove',(e)=>{
+			if (rightActivePointer!==e.pointerId) return;
+			e.preventDefault();
+			const p=getPadXY(rightPad,e.clientX,e.clientY);
+			setRightDot(p.x,p.y);
+			const now=performance.now();
+			const dt=Math.max(0.001,(now-lastRightTime)/1000);
+			const dv=Math.abs(p.y-lastRightY);
+			const instPerSec=dv/dt;
+			const normalized=clamp01(instPerSec/VELOCITY_NORM_MAX);
+			rightVelocity=0.65*rightVelocity+0.35*normalized;
+			lastRightTime=now; lastRightY=p.y;
+			applyHarmonicsAndProfiles(p.x); setVolumeFromVelocity();
+		},{passive:false});
+		rightPad.addEventListener('pointerup',(e)=>{
+			if (rightActivePointer!==e.pointerId) return;
+			e.preventDefault();
+			rightActivePointer=null; rightVelocity=0.0; setVolumeFromVelocity();
+		},{passive:false});
+		rightPad.addEventListener('pointercancel',(e)=>{
+			if (rightActivePointer!==e.pointerId) return;
+			rightActivePointer=null; rightVelocity=0.0; setVolumeFromVelocity();
+		},{passive:false});
+
+		// Passive velocity decay
+		let lastTick=performance.now();
+		function tick(now){
+			const dt=Math.max(0,(now-lastTick)/1000);
+			lastTick=now;
+			const decay=Math.log(2)/0.16;
+			rightVelocity=Math.max(0,rightVelocity*Math.exp(-decay*dt));
+			setVolumeFromVelocity();
+			requestAnimationFrame(tick);
+		}
+		requestAnimationFrame(tick);
+
+		// Test tone
+		testToneBtn.addEventListener('click', (e)=>{
+			e.preventDefault(); maybeUnlock();
+			const osc=audioCtx.createOscillator(); osc.type='sine'; osc.frequency.value=440;
+			const g=audioCtx.createGain(); const t0=audioCtx.currentTime;
+			g.gain.setValueAtTime(0.0,t0);
+			g.gain.linearRampToValueAtTime(0.8,t0+0.02);
+			g.gain.setValueAtTime(0.8,t0+0.98);
+			g.gain.linearRampToValueAtTime(0.0,t0+1.0);
+			osc.connect(g).connect(audioCtx.destination);
+			osc.start(t0); osc.stop(t0+1.0);
+			osc.onended=()=>{ osc.disconnect(); g.disconnect(); };
+		});
+
+		// Overlay unlock
+		function onUnlockTap(e){ e.preventDefault(); maybeUnlock(); }
+		unlock.addEventListener('pointerdown', onUnlockTap, {passive:false});
+		unlockBtn.addEventListener('click', onUnlockTap);
+		unlockBtn.addEventListener('touchend', onUnlockTap, {passive:false});
+
+		// Init visuals
+		setLeftDotByLocal(0,0.5,0.5);
+		setLeftDotByLocal(1,0.5,0.5);
+		setRightDot(0.5,0.5);
+		hudEl.textContent='Vel: 0.00 | Vol: 0.00 | Harm: 0.50';
+		volFillEl.style.height='0%';
+
+		// Prevent iOS gesture interference
+		document.addEventListener('gesturestart', e=>e.preventDefault());
+		document.addEventListener('gesturechange', e=>e.preventDefault());
+		document.addEventListener('gestureend', e=>e.preventDefault());
+	</script>
+</body>
+</html>
