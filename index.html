@@ -3,9 +3,9 @@
 <head>
 	<meta charset="utf-8" />
 	<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1.0, user-scalable=no" />
-	<title>Dual Pads – Wide Layout + Bow Curve</title>
+	<title>Dual Pads – Wide Layout + Bow Threshold + Guides</title>
 	<style>
-		:root { --bg:#0e0f12; --panel:#2b2f36; --panel2:#22252a; --text:#cfd6e4; --grid:#ffffff12; }
+		:root { --bg:#000000; --text:#cfd6e4; --accent:#ffd83b; }
 
 		html, body {
 			height: 100%;
@@ -22,7 +22,6 @@
 			-webkit-touch-callout: none; -webkit-tap-highlight-color: transparent;
 		}
 
-		/* Full-bleed stage: fills entire viewport with no side gaps */
 		.stage {
 			position: relative;
 			width: 100vw;
@@ -30,14 +29,13 @@
 			padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
 			box-sizing: border-box;
 			display: flex;
-			gap: 0; /* no gap between pads */
+			gap: 0;
 		}
 
-		/* Left pad takes 2/3, right pad 1/3 */
 		.pad {
 			position: relative;
 			height: 100%;
-			background: linear-gradient(180deg, var(--panel) 0%, var(--panel2) 100%);
+			background: #000; /* fully black */
 			box-shadow: inset 0 0 0 1px rgba(255,255,255,0.07);
 			touch-action: none;
 			overflow: hidden;
@@ -45,25 +43,25 @@
 		#padLeft { flex: 2 1 0; }
 		#padRight { flex: 1 1 0; border-left: 1px solid rgba(255,255,255,0.07); }
 
-		.pad::after {
-			content: ""; position: absolute; inset: 0;
-			background:
-				linear-gradient(var(--grid) 1px, transparent 1px) 0 0 / 100% 12.5%,
-				linear-gradient(90deg, var(--grid) 1px, transparent 1px) 50% 0 / 50% 100%,
-				linear-gradient(90deg, var(--grid) 1px, transparent 1px) 0 0 / 50% 100%;
-			pointer-events: none;
-		}
+		/* removed grid */
 
-		.center-divider { position: absolute; top: 0; bottom: 0; left: 50%; width: 2px; background: #ffffff33; pointer-events: none; }
+		.center-divider { position: absolute; top: 0; bottom: 0; left: 50%; width: 2px; background: #ffffff26; pointer-events: none; }
 		.string-label { position: absolute; top: 8px; font-size: 12px; opacity: 0.8; pointer-events: none; }
 		.string-label.left { left: 12px; }
 		.string-label.right { right: 12px; }
+
+		/* Guide lines on left pad */
+		.guides { position: absolute; inset: 0; pointer-events: none; z-index: 1; }
+		.guide-line { position: absolute; left: 0; right: 0; opacity: 0.7; }
+		.guide-line.octave { height: 2px; background: #ffffff; opacity: 0.9; }
+		.guide-line.fifth { height: 1.5px; background: var(--accent); opacity: 0.95; }
+		.guide-line.chrom { height: 1px; background: #ffffff; opacity: 0.28; }
 
 		.indicator {
 			position: absolute; width: 16px; height: 16px; border-radius: 999px;
 			background: radial-gradient(circle at 35% 35%, #ffffff, #e9edf5);
 			box-shadow: 0 6px 14px rgba(0,0,0,0.45), inset 0 0 0 1px rgba(0,0,0,0.08);
-			transform: translate(-50%, -50%); pointer-events: none;
+			transform: translate(-50%, -50%); pointer-events: none; z-index: 2;
 		}
 
 		.hud {
@@ -75,7 +73,6 @@
 		.vol-meter { position: absolute; right: 8px; bottom: 8px; top: 8px; width: 10px; background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.15); border-radius: 6px; overflow: hidden; }
 		.vol-fill { position: absolute; left: 0; right: 0; bottom: 0; height: 0%; background: linear-gradient(180deg, #8bd3ff, #3aa0ff); }
 
-		/* Controls fixed, so pads can use full height behind */
 		.controls {
 			position: fixed; left: 50%; bottom: calc(env(safe-area-inset-bottom) + 8px);
 			transform: translateX(-50%);
@@ -99,6 +96,7 @@
 <body>
 	<div class="stage">
 		<div class="pad" id="padLeft">
+			<div class="guides" id="leftGuides"></div>
 			<div class="center-divider"></div>
 			<div class="string-label left">String A</div>
 			<div class="string-label right">String B</div>
@@ -117,13 +115,12 @@
 		<button id="testToneBtn">Test tone (1s)</button>
 	</div>
 
-	<!-- iOS unlock -->
 	<div class="unlock" id="unlock">
 		<button id="unlockBtn" type="button">Tap to enable audio</button>
 	</div>
 
 	<script>
-		// Utils
+		// ---------------- Utils ----------------
 		function clamp01(v) { return Math.min(1, Math.max(0, v)); }
 		function getPadXY(pad, clientX, clientY) {
 			const r = pad.getBoundingClientRect();
@@ -133,7 +130,7 @@
 		}
 		function lerp(a,b,t){ return a + (b-a)*t; }
 
-		// DOM
+		// ---------------- DOM ----------------
 		const leftPad = document.getElementById('padLeft');
 		const rightPad = document.getElementById('padRight');
 		const leftDots = [document.getElementById('leftDot0'), document.getElementById('leftDot1')];
@@ -143,6 +140,7 @@
 		const testToneBtn = document.getElementById('testToneBtn');
 		const unlock = document.getElementById('unlock');
 		const unlockBtn = document.getElementById('unlockBtn');
+		const leftGuides = document.getElementById('leftGuides');
 
 		// Left rectangles mapping
 		function rectInfoFromClient(e) {
@@ -158,7 +156,7 @@
 		}
 		function setRightDot(x, y) { rightDot.style.left = (x * 100) + '%'; rightDot.style.top = ((1 - y) * 100) + '%'; }
 
-		// Audio
+		// ---------------- Audio ----------------
 		let audioCtx = null, audioStarted = false, unlocked = false;
 		let masterGain = null, activeGate = null, toneBus = null;
 
@@ -175,16 +173,18 @@
 
 		let reedDrive=null, reedShaper=null, reedBias=null;
 		let notch=null, formant1=null, formant2=null, lowpass=null, filterSum=null;
-
 		let noiseBuf=null, noiseSrc=null, breathHP=null, breathBP=null, breathGain=null;
-
 		let vibLFO=null, vibDepthA=null, vibDepthB=null;
 
-		const MIN_FREQ=110, OCTAVES=3.0;
+		const MIN_FREQ=110, OCTAVES=3.0; // 110 Hz up 3 octaves
 		let freqA=220, freqB=330, currentHarm=0.5;
 
+		// Velocity controls
 		const VELOCITY_NORM_MAX=6.0;
 		let rightVelocity=0.0, lastRightTime=null, lastRightY=0.5;
+
+		// Adjustable: minimum bow velocity threshold that counts as "moving"
+		let MIN_BOW_VELOCITY = 0.006; // lower = more sensitive to slow moves
 
 		const stringActiveCount=[0,0];
 		const frozen=[false,false];
@@ -334,15 +334,13 @@
 			reedBias.offset.setTargetAtTime(lerp(0.015,0.05,currentHarm),t,0.05);
 		}
 
-		// New bow-to-volume curve:
-		// - If velocity is nearly zero, volume = 0.
-		// - Once moving, minimum 0.5 volume.
-		// - Faster movement adds only a little (compresses toward ~0.85–0.9).
+		// Bow velocity -> volume curve (with adjustable minimum movement threshold)
 		function mapVelocityToVolume(v) {
-			if (v < 0.02) return 0.0; // stillness = silence
-			const vNorm = clamp01(v); // velocity already normalized/decayed
+			if (v < MIN_BOW_VELOCITY) return 0.0; // below threshold = silence
+			const vAdj = (v - MIN_BOW_VELOCITY) / (1 - MIN_BOW_VELOCITY);
+			const vNorm = clamp01(vAdj);
 			const extra = 0.35 * (1 - Math.exp(-3.0 * vNorm)); // saturates quickly
-			return Math.min(0.9, 0.5 + extra); // floor at 0.5, cap ~0.9
+			return Math.min(0.9, 0.5 + extra); // floor at 0.5 once moving
 		}
 
 		function setVolumeFromVelocity(){
@@ -353,7 +351,7 @@
 				masterGain.gain.setTargetAtTime(vol,t,0.015);
 			}
 			breathGain?.gain?.setTargetAtTime?.(vol * 0.20, t, 0.02);
-			hudEl.textContent = `Vel: ${rightVelocity.toFixed(2)} | Vol: ${vol.toFixed(2)} | Harm: ${currentHarm.toFixed(2)}`;
+			hudEl.textContent = `Vel: ${rightVelocity.toFixed(3)} | Vol: ${vol.toFixed(2)} | Harm: ${currentHarm.toFixed(2)}`;
 			volFillEl.style.height = `${Math.round(vol*100)}%`;
 		}
 
@@ -510,7 +508,24 @@
 		unlockBtn.addEventListener('click', onUnlockTap);
 		unlockBtn.addEventListener('touchend', onUnlockTap, {passive:false});
 
+		// ---------------- Guides creation (left pad) ----------------
+		function buildGuides() {
+			leftGuides.innerHTML = '';
+			// Total semitone steps
+			const steps = Math.round(OCTAVES * 12);
+			for (let k = 0; k <= steps; k++) {
+				const y = k / steps; // linear in semitone space -> matches our pitch mapping
+				const line = document.createElement('div');
+				const isOct = (k % 12 === 0);
+				const isFifth = (k % 12 === 7);
+				line.className = 'guide-line ' + (isOct ? 'octave' : (isFifth ? 'fifth' : 'chrom'));
+				line.style.top = ((1 - y) * 100) + '%';
+				leftGuides.appendChild(line);
+			}
+		}
+
 		// Init visuals
+		buildGuides();
 		setLeftDotByLocal(0,0.5,0.5);
 		setLeftDotByLocal(1,0.5,0.5);
 		setRightDot(0.5,0.5);
