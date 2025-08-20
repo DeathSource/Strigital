@@ -3,94 +3,56 @@
 <head>
 	<meta charset="utf-8" />
 	<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1.0, user-scalable=no" />
-	<title>Dual Pads – Wide Layout + Bow Threshold + Guides</title>
+	<title>DigiViol</title>
 	<style>
-		:root { --bg:#000000; --text:#cfd6e4; --accent:#ffd83b; }
+		:root { --bg:#000; --text:#cfd6e4; --accent:#ffd83b; --freeze:#6cc2ff; }
 
-		html, body {
-			height: 100%;
-			margin: 0;
-			background: var(--bg);
-			color: var(--text);
-			font-family: -apple-system, system-ui, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
-			overscroll-behavior: none;
-		}
-
-		body {
-			height: 100dvh;
-			-webkit-user-select: none; user-select: none;
-			-webkit-touch-callout: none; -webkit-tap-highlight-color: transparent;
-		}
+		html, body { height:100%; margin:0; background:var(--bg); color:var(--text); font-family:-apple-system, system-ui, Segoe UI, Roboto, Helvetica, Arial, sans-serif; overscroll-behavior:none; }
+		body { height:100dvh; -webkit-user-select:none; user-select:none; -webkit-touch-callout:none; -webkit-tap-highlight-color:transparent; }
 
 		.stage {
-			position: relative;
-			width: 100vw;
-			height: 100dvh;
-			padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
-			box-sizing: border-box;
-			display: flex;
-			gap: 0;
+			position:relative; width:100vw; height:100dvh;
+			padding:env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+			box-sizing:border-box; display:flex; gap:0;
 		}
 
-		.pad {
-			position: relative;
-			height: 100%;
-			background: #000; /* fully black */
-			box-shadow: inset 0 0 0 1px rgba(255,255,255,0.07);
-			touch-action: none;
-			overflow: hidden;
-		}
-		#padLeft { flex: 2 1 0; }
-		#padRight { flex: 1 1 0; border-left: 1px solid rgba(255,255,255,0.07); }
+		.pad { position:relative; height:100%; background:#000; box-shadow:inset 0 0 0 1px rgba(255,255,255,0.07); touch-action:none; overflow:hidden; }
+		#padLeft { flex:2 1 0; }
+		#padRight { flex:1 1 0; border-left:1px solid rgba(255,255,255,0.07); }
 
-		/* removed grid */
+		.guides { position:absolute; inset:0; pointer-events:none; z-index:1; }
+		.guide-line { position:absolute; left:0; right:0; }
+		.guide-line.octave { height:2px; background:#fff; opacity:0.9; }
+		.guide-line.fifth  { height:1.5px; background:var(--accent); opacity:0.95; }
+		.guide-line.chrom  { height:1px; background:#fff; opacity:0.28; }
 
-		.center-divider { position: absolute; top: 0; bottom: 0; left: 50%; width: 2px; background: #ffffff26; pointer-events: none; }
-		.string-label { position: absolute; top: 8px; font-size: 12px; opacity: 0.8; pointer-events: none; }
-		.string-label.left { left: 12px; }
-		.string-label.right { right: 12px; }
+		.center-divider { position:absolute; top:0; bottom:0; left:50%; width:2px; background:#ffffff26; pointer-events:none; }
 
-		/* Guide lines on left pad */
-		.guides { position: absolute; inset: 0; pointer-events: none; z-index: 1; }
-		.guide-line { position: absolute; left: 0; right: 0; opacity: 0.7; }
-		.guide-line.octave { height: 2px; background: #ffffff; opacity: 0.9; }
-		.guide-line.fifth { height: 1.5px; background: var(--accent); opacity: 0.95; }
-		.guide-line.chrom { height: 1px; background: #ffffff; opacity: 0.28; }
+		.arrow { position:absolute; width:0; height:0; border-top:8px solid transparent; border-bottom:8px solid transparent; border-left:12px solid #fff; z-index:3; pointer-events:none; filter:drop-shadow(0 2px 2px rgba(0,0,0,0.6)); }
+		.arrow.frozen { border-left-color: var(--freeze); }
+		#arrowA { left:calc(50% - 10px); }
+		#arrowB { left:calc(100% - 10px); }
 
-		.indicator {
-			position: absolute; width: 16px; height: 16px; border-radius: 999px;
-			background: radial-gradient(circle at 35% 35%, #ffffff, #e9edf5);
-			box-shadow: 0 6px 14px rgba(0,0,0,0.45), inset 0 0 0 1px rgba(0,0,0,0.08);
-			transform: translate(-50%, -50%); pointer-events: none; z-index: 2;
-		}
+		.string-meter { position:absolute; height:8px; background:rgba(255,255,255,0.10); border:1px solid rgba(255,255,255,0.18); border-radius:8px; overflow:hidden; z-index:3; }
+		#meterA { left:8px; width:calc(50% - 16px); top:8px; }
+		#meterB { left:calc(50% + 8px); width:calc(50% - 16px); top:8px; }
+		.string-fill { height:100%; width:0%; background:linear-gradient(90deg, #3aa0ff, #8bd3ff); }
 
-		.hud {
-			position: absolute; top: 8px; left: 50%; transform: translateX(-50%);
-			font-size: 16px; font-weight: 600; font-variant-numeric: tabular-nums;
-			background: rgba(255,255,255,0.10); border: 1px solid rgba(255,255,255,0.20);
-			padding: 4px 10px; border-radius: 10px; pointer-events: none; opacity: 0.95; white-space: nowrap; z-index: 10;
-		}
-		.vol-meter { position: absolute; right: 8px; bottom: 8px; top: 8px; width: 10px; background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.15); border-radius: 6px; overflow: hidden; }
-		.vol-fill { position: absolute; left: 0; right: 0; bottom: 0; height: 0%; background: linear-gradient(180deg, #8bd3ff, #3aa0ff); }
+		.string-toggles { position:absolute; left:0; right:0; top:28px; display:flex; justify-content:space-between; gap:8px; padding:0 12px; z-index:3; }
+		.string-toggles label { display:flex; align-items:center; gap:10px; color:#fff; font-size:16px; background:rgba(255,255,255,0.10); padding:8px 12px; border-radius:12px; }
+		.string-toggles input { width:30px; height:30px; accent-color:#1f6feb; }
 
-		.controls {
-			position: fixed; left: 50%; bottom: calc(env(safe-area-inset-bottom) + 8px);
-			transform: translateX(-50%);
-			display: flex; gap: 10px; z-index: 20;
-		}
-		button { background:#2f6feb; color:#fff; border:none; padding:8px 12px; border-radius:10px; cursor:pointer; touch-action:manipulation; }
-		button:active { transform: translateY(1px); }
+		.vol-meter { position:absolute; right:8px; bottom:8px; top:8px; width:10px; background:rgba(255,255,255,0.06); border:1px solid rgba(255,255,255,0.15); border-radius:6px; overflow:hidden; }
+		.vol-fill  { position:absolute; left:0; right:0; bottom:0; height:0%; background:linear-gradient(180deg, #8bd3ff, #3aa0ff); }
+		#bowHud    { position:absolute; top:8px; left:50%; transform:translateX(-50%); font-variant-numeric:tabular-nums; font-size:16px; background:rgba(255,255,255,0.10); border:1px solid rgba(255,255,255,0.20); padding:4px 10px; border-radius:10px; pointer-events:none; opacity:0.95; }
 
-		/* iOS audio unlock overlay */
-		.unlock {
-			position: fixed; inset: 0; display: flex; align-items: center; justify-content: center;
-			background: rgba(0,0,0,0.6); backdrop-filter: blur(4px); z-index: 9999;
-		}
-		.unlock.hidden { display: none; }
-		.unlock button {
-			font-size: 16px; padding: 12px 16px; border-radius: 12px; border: 1px solid #ffffff55;
-			background: #1f6feb; color: #fff;
-		}
+		.unlock { position:fixed; inset:0; display:flex; align-items:center; justify-content:center; background:rgba(0,0,0,0.7); backdrop-filter:blur(6px); z-index:9999; }
+		.unlock.hidden { display:none; }
+		.unlock .panel { color:#fff; text-align:center; max-width:min(90vw, 520px); padding:24px 18px; border:1px solid rgba(255,255,255,0.25); border-radius:16px; background:rgba(20,20,20,0.6); }
+		.unlock .title { font-size:42px; font-weight:700; margin-bottom:6px; letter-spacing:0.5px; }
+		.unlock .subtitle { font-size:16px; opacity:0.9; line-height:1.45; margin-bottom:14px; }
+		.unlock .cta { display:inline-block; margin-top:8px; background:#1f6feb; color:#fff; padding:10px 14px; border-radius:12px; border:1px solid #ffffff66; cursor:pointer; touch-action:manipulation; }
+		.unlock .cta:active { transform:translateY(1px); }
 	</style>
 </head>
 <body>
@@ -98,175 +60,233 @@
 		<div class="pad" id="padLeft">
 			<div class="guides" id="leftGuides"></div>
 			<div class="center-divider"></div>
-			<div class="string-label left">String A</div>
-			<div class="string-label right">String B</div>
-			<div class="indicator" id="leftDot0" style="left: 25%; top: 50%;"></div>
-			<div class="indicator" id="leftDot1" style="left: 75%; top: 50%;"></div>
+
+			<div id="meterA" class="string-meter"><div id="fillA" class="string-fill"></div></div>
+			<div id="meterB" class="string-meter"><div id="fillB" class="string-fill"></div></div>
+
+			<div class="string-toggles">
+				<label><input type="checkbox" id="muteA" /> off A</label>
+				<label><input type="checkbox" id="muteB" /> off B</label>
+			</div>
+
+			<div class="arrow" id="arrowA"></div>
+			<div class="arrow" id="arrowB"></div>
 		</div>
 
 		<div class="pad" id="padRight">
-			<div class="hud" id="hud">Vel: 0.00 | Vol: 0.00 | Harm: 0.50</div>
+			<div id="bowHud">0 0</div>
 			<div class="vol-meter"><div class="vol-fill" id="volFill"></div></div>
-			<div class="indicator" id="rightDot" style="left: 50%; top: 50%;"></div>
+			<div class="indicator" id="rightDot" style="left:50%; top:50%;"></div>
 		</div>
 	</div>
 
-	<div class="controls">
-		<button id="testToneBtn">Test tone (1s)</button>
-	</div>
-
 	<div class="unlock" id="unlock">
-		<button id="unlockBtn" type="button">Tap to enable audio</button>
+		<div class="panel">
+			<div class="title">DigiViol</div>
+			<div class="subtitle">A work in progress. Use the pad on the right for the bow control, and the two left pads for the strings. Click to enter.</div>
+			<button class="cta" id="unlockBtn" type="button">Enter</button>
+		</div>
 	</div>
 
 	<script>
-		// ---------------- Utils ----------------
-		function clamp01(v) { return Math.min(1, Math.max(0, v)); }
-		function getPadXY(pad, clientX, clientY) {
-			const r = pad.getBoundingClientRect();
-			const x = clamp01((clientX - r.left) / r.width);
-			const y = clamp01((clientY - r.top) / r.height);
-			return { x, y: 1 - y };
+		// Utils
+		function clamp01(v){ return Math.min(1, Math.max(0, v)); }
+		function getPadXY(pad, x, y){
+			const r=pad.getBoundingClientRect();
+			const px=(x-r.left)/r.width, py=(y-r.top)/r.height;
+			return { x:clamp01(px), y:1-clamp01(py) };
 		}
-		function lerp(a,b,t){ return a + (b-a)*t; }
+		function setRightDot(x, y){ rightDot.style.left=(x*100)+'%'; rightDot.style.top=((1-y)*100)+'%'; }
+		function setArrowY(s, y){ (s===0?arrowA:arrowB).style.top = `calc(${(1 - y) * 100}% - 8px)`; }
+		function resetArrowToBottom(s){ setArrowY(s, 0); }
+		function setArrowFrozen(s, on){ (s===0?arrowA:arrowB).classList.toggle('frozen', !!on); }
 
-		// ---------------- DOM ----------------
+		// DOM
 		const leftPad = document.getElementById('padLeft');
 		const rightPad = document.getElementById('padRight');
-		const leftDots = [document.getElementById('leftDot0'), document.getElementById('leftDot1')];
 		const rightDot = document.getElementById('rightDot');
-		const hudEl = document.getElementById('hud');
-		const volFillEl = document.getElementById('volFill');
-		const testToneBtn = document.getElementById('testToneBtn');
+		const leftGuides = document.getElementById('leftGuides');
 		const unlock = document.getElementById('unlock');
 		const unlockBtn = document.getElementById('unlockBtn');
-		const leftGuides = document.getElementById('leftGuides');
+		const volFillEl = document.getElementById('volFill');
+		const bowHud = document.getElementById('bowHud');
+		const muteAEl = document.getElementById('muteA');
+		const muteBEl = document.getElementById('muteB');
+		const arrowA = document.getElementById('arrowA');
+		const arrowB = document.getElementById('arrowB');
+		const fillA = document.getElementById('fillA');
+		const fillB = document.getElementById('fillB');
 
-		// Left rectangles mapping
-		function rectInfoFromClient(e) {
-			const p = getPadXY(leftPad, e.clientX, e.clientY);
-			const s = p.x < 0.5 ? 0 : 1;
-			const localX = s === 0 ? (p.x / 0.5) : ((p.x - 0.5) / 0.5);
-			return { s, localX: clamp01(localX), y: p.y, padX: p.x };
+		function updateStringMeters(){
+			fillA.style.width = `${Math.round(stringLocalX[0]*100)}%`;
+			fillB.style.width = `${Math.round(stringLocalX[1]*100)}%`;
 		}
-		function setLeftDotByLocal(s, localX, y) {
-			const leftPct = s === 0 ? (localX * 50) : (50 + localX * 50);
-			leftDots[s].style.left = leftPct + '%';
-			leftDots[s].style.top = ((1 - y) * 100) + '%';
-		}
-		function setRightDot(x, y) { rightDot.style.left = (x * 100) + '%'; rightDot.style.top = ((1 - y) * 100) + '%'; }
+		function localXForString(px, s){ return s===0 ? clamp01(px/0.5) : clamp01((px-0.5)/0.5); }
 
-		// ---------------- Audio ----------------
-		let audioCtx = null, audioStarted = false, unlocked = false;
-		let masterGain = null, activeGate = null, toneBus = null;
+		// Audio core + FX
+		let audioCtx=null, unlockedAudio=false, audioStarted=false;
 
-		function makeVoiceObj() {
+		let masterGain=null, toneBus=null, currentHarm=0.5, finalComp=null;
+
+		function makeVoice(){
 			return {
 				tri:null, sine:null, saw:null,
 				triMix:null, sineMix:null, sawMix:null,
-				panNode:null, eq1:null, eq2:null, smallDelay:null,
-				loudnessGain:null, balGain:null, stringGate:null
+				pan:null, eq1:null, eq2:null, delay:null,
+				loudness:null, bal:null, gate:null, act:null
 			};
 		}
-		const voiceA = makeVoiceObj();
-		const voiceB = makeVoiceObj();
+		const voiceA = makeVoice();
+		const voiceB = makeVoice();
 
 		let reedDrive=null, reedShaper=null, reedBias=null;
 		let notch=null, formant1=null, formant2=null, lowpass=null, filterSum=null;
-		let noiseBuf=null, noiseSrc=null, breathHP=null, breathBP=null, breathGain=null;
+
+		// Room + Hall reverbs
+		let roomSend=null, roomPre=null, roomConv=null, roomDamp=null, roomGain=null;
+		let hallSend=null, hallPre=null, hallConv=null, hallDamp=null, hallGain=null;
+
+		// Breath (soft noise layer following volume)
+		let noiseBuf=null, noiseSrc=null;
+		let breathHP=null, breathBP=null, breathGain=null;
+
+		// Vibrato
 		let vibLFO=null, vibDepthA=null, vibDepthB=null;
 
-		const MIN_FREQ=110, OCTAVES=3.0; // 110 Hz up 3 octaves
-		let freqA=220, freqB=330, currentHarm=0.5;
+		// Pitch and states
+		const MIN_FREQ=110, OCTAVES=3.0, FIFTH=Math.pow(2,7/12);
+		const START_FREQ_A = MIN_FREQ;
+		const START_FREQ_B = MIN_FREQ*FIFTH;
+		let freqA=START_FREQ_A, freqB=START_FREQ_B;
 
-		// Velocity controls
-		const VELOCITY_NORM_MAX=6.0;
-		let rightVelocity=0.0, lastRightTime=null, lastRightY=0.5;
-
-		// Adjustable: minimum bow velocity threshold that counts as "moving"
-		let MIN_BOW_VELOCITY = 0.006; // lower = more sensitive to slow moves
-
-		const stringActiveCount=[0,0];
-		const frozen=[false,false];
-		const lastTapTime=[0,0];
+		let stringLocalX=[0.5,0.5];
+		let stringActiveCount=[0,0];
+		let frozen=[false,false];
+		let stringMute=[false,false];
+		let lastTapTime=[0,0];
 		const DOUBLE_TAP_MS=280;
 
-		const stringLocalX=[0.5,0.5];
+		let bowEngaged=false;
+		let bowSpeedNorm = 0.0;
+		let lastRightTime=null, lastRightY=0.5, rightActivePointer=null;
 
-		function ensureCtx() { if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)(); }
+		// Decays
+		const DECAY_HELD_S = 2.4;
+		const DECAY_OPEN_S = 3.0;
+		let decayingHeld=[false,false];
+		let decayingOpen=[false,false];
+		let decayTimerHeld=[null,null];
+		let decayTimerOpen=[null,null];
 
-		function createNoiseBuffer(ctx, seconds=2) {
-			const len = Math.floor(seconds * ctx.sampleRate);
-			const buf = ctx.createBuffer(1, len, ctx.sampleRate);
-			const d = buf.getChannelData(0);
-			let last = 0;
-			for (let i=0;i<len;i++){ const white=Math.random()*2-1; last=(last*0.98)+(white*0.02); d[i]=last; }
+		// Open decay: allow pitch change on left press (no cancellation)
+		let pitchLocked=[false,false];
+		let pendingY=[0,0];
+
+		// Volume map
+		const VOL_LOG_C = 15;
+		function mapSpeedToVolume(s){
+			s = clamp01(s);
+			if (s <= 0) return 0;
+			return Math.log(1 + VOL_LOG_C*s) / Math.log(1 + VOL_LOG_C);
+		}
+
+		function ensureCtx(){ if(!audioCtx) audioCtx = new (window.AudioContext||window.webkitAudioContext)(); }
+		function createNoiseBuffer(ctx, seconds=2){
+			const len=Math.floor(seconds*ctx.sampleRate), buf=ctx.createBuffer(1,len,ctx.sampleRate), d=buf.getChannelData(0);
+			for(let i=0;i<len;i++){ d[i] = Math.random()*2-1; }
 			return buf;
 		}
-		function createReedCurve(samples=2048, k=2.2) {
-			const curve = new Float32Array(samples);
-			for (let i=0;i<samples;i++){ const x=(i/(samples-1))*2-1; curve[i]=Math.tanh(k*(x+0.02))*0.9; }
-			return curve;
+		function createReedCurve(samples=2048, k=2.2){
+			const curve=new Float32Array(samples);
+			for(let i=0;i<samples;i++){ const x=(i/(samples-1))*2-1; curve[i]=Math.tanh(k*(x+0.02))*0.9; } return curve;
 		}
 
-		function initVoice(v, panValue, cfg) {
+		function initVoice(v, panValue, cfg){
 			v.tri=audioCtx.createOscillator(); v.tri.type='triangle';
 			v.sine=audioCtx.createOscillator(); v.sine.type='sine';
-			v.saw=audioCtx.createOscillator(); v.saw.type='sawtooth';
-
+			v.saw =audioCtx.createOscillator(); v.saw.type ='sawtooth';
 			v.triMix=audioCtx.createGain(); v.triMix.gain.value=cfg.tri;
 			v.sineMix=audioCtx.createGain(); v.sineMix.gain.value=cfg.sine;
-			v.sawMix=audioCtx.createGain(); v.sawMix.gain.value=cfg.saw;
-
-			v.panNode=audioCtx.createStereoPanner(); v.panNode.pan.value=panValue;
-
+			v.sawMix =audioCtx.createGain(); v.sawMix.gain.value =cfg.saw;
+			v.pan=audioCtx.createStereoPanner(); v.pan.pan.value=panValue;
 			v.eq1=audioCtx.createBiquadFilter(); v.eq1.type=cfg.eq1Type; v.eq1.frequency.value=cfg.eq1Freq; v.eq1.gain.value=cfg.eq1Gain; v.eq1.Q.value=cfg.eq1Q ?? 0.7;
 			v.eq2=audioCtx.createBiquadFilter(); v.eq2.type=cfg.eq2Type; v.eq2.frequency.value=cfg.eq2Freq; v.eq2.gain.value=cfg.eq2Gain; v.eq2.Q.value=cfg.eq2Q ?? 0.7;
+			v.delay=audioCtx.createDelay(0.02); v.delay.delayTime.value=cfg.delay;
+			v.loudness=audioCtx.createGain(); v.loudness.gain.value=1.0;
+			v.bal=audioCtx.createGain();      v.bal.gain.value=0.5;
+			v.gate=audioCtx.createGain();     v.gate.gain.value=0.0;
+			v.act=audioCtx.createGain();      v.act.gain.value=0.0;
 
-			v.smallDelay=audioCtx.createDelay(0.02); v.smallDelay.delayTime.value=cfg.delay;
-
-			v.loudnessGain=audioCtx.createGain(); v.loudnessGain.gain.value=1.0;
-			v.balGain=audioCtx.createGain(); v.balGain.gain.value=0.5;
-			v.stringGate=audioCtx.createGain(); v.stringGate.gain.value=0.0;
-
-			v.tri.connect(v.triMix).connect(v.panNode);
-			v.sine.connect(v.sineMix).connect(v.panNode);
-			v.saw.connect(v.sawMix).connect(v.panNode);
-			v.panNode.connect(v.eq1).connect(v.eq2).connect(v.smallDelay).connect(v.loudnessGain).connect(v.balGain).connect(v.stringGate).connect(toneBus);
+			v.tri.connect(v.triMix).connect(v.pan);
+			v.sine.connect(v.sineMix).connect(v.pan);
+			v.saw.connect(v.sawMix).connect(v.pan);
+			v.pan.connect(v.eq1).connect(v.eq2).connect(v.delay).connect(v.loudness).connect(v.bal).connect(v.gate).connect(v.act).connect(toneBus);
 		}
 
-		function setupAudio() {
-			if (audioStarted) return;
+		function makeIR(ctx, dur=1.0, decay=0.50, tilt=-0.02){
+			const len=Math.floor(dur*ctx.sampleRate), buf=ctx.createBuffer(2,len,ctx.sampleRate);
+			for(let ch=0; ch<2; ch++){
+				const d=buf.getChannelData(ch);
+				for(let i=0;i<len;i++){ const t=i/len; const env=Math.pow(1-t, decay*6); const col=1+tilt*(t-0.5); d[i]=(Math.random()*2-1)*env*col; }
+			}
+			return buf;
+		}
+
+		function setupAudio(){
+			if(audioStarted) return;
 			ensureCtx();
 
-			masterGain = audioCtx.createGain(); masterGain.gain.value = 0.0;
-			activeGate = audioCtx.createGain(); activeGate.gain.value = 0.0;
-			activeGate.connect(masterGain).connect(audioCtx.destination);
-
+			masterGain = audioCtx.createGain(); masterGain.gain.value=1.0;
 			toneBus = audioCtx.createGain();
 
-			initVoice(voiceA, -0.95, {
-				tri:0.48, sine:0.46, saw:0.04,
-				eq1Type:'lowshelf', eq1Freq:240, eq1Gain:+3.0,
-				eq2Type:'peaking',  eq2Freq:700, eq2Gain:-1.2, eq2Q:1.0,
+			// Final gentle compressor
+			finalComp = audioCtx.createDynamicsCompressor();
+			finalComp.threshold.value = -22;
+			finalComp.knee.value = 18;
+			finalComp.ratio.value = 2.2;
+			finalComp.attack.value = 0.005;
+			finalComp.release.value = 0.12;
+
+			// Room (short)
+			roomSend=audioCtx.createGain(); roomSend.gain.value=0.30;
+			roomPre =audioCtx.createDelay(0.2); roomPre.delayTime.value=0.018;
+			roomConv=audioCtx.createConvolver(); roomConv.buffer=makeIR(audioCtx, 1.0, 0.50, -0.02);
+			roomDamp=audioCtx.createBiquadFilter(); roomDamp.type='lowpass'; roomDamp.frequency.value=3800;
+			roomGain=audioCtx.createGain(); roomGain.gain.value=0.30;
+			roomSend.connect(roomPre).connect(roomConv).connect(roomDamp).connect(roomGain).connect(audioCtx.destination);
+
+			// Hall (general reverb)
+			hallSend=audioCtx.createGain(); hallSend.gain.value=0.14;
+			hallPre =audioCtx.createDelay(0.35); hallPre.delayTime.value=0.024;
+			hallConv=audioCtx.createConvolver(); hallConv.buffer=makeIR(audioCtx, 1.8, 0.60, -0.04);
+			hallDamp=audioCtx.createBiquadFilter(); hallDamp.type='lowpass'; hallDamp.frequency.value=3400;
+			hallGain=audioCtx.createGain(); hallGain.gain.value=0.18;
+			hallSend.connect(hallPre).connect(hallConv).connect(hallDamp).connect(hallGain).connect(audioCtx.destination);
+
+			// Voices
+			initVoice(voiceA, -0.9, {
+				tri:0.46, sine:0.50, saw:0.04,
+				eq1Type:'lowshelf', eq1Freq:220, eq1Gain:+3.0,
+				eq2Type:'lowpass',  eq2Freq:2300, eq2Gain:0.0,  eq2Q:0.7,
 				delay:0.000
 			});
-			initVoice(voiceB, +0.95, {
+			initVoice(voiceB, +0.9, {
 				tri:0.56, sine:0.28, saw:0.10,
 				eq1Type:'highshelf', eq1Freq:2200, eq1Gain:+2.2,
-				eq2Type:'highpass',  eq2Freq:95,   eq2Gain:0.0,
+				eq2Type:'highpass',  eq2Freq:95,   eq2Gain:0.0,  eq2Q:0.9,
 				delay:0.004
 			});
 
-			reedDrive=audioCtx.createGain(); reedDrive.gain.value=1.5;
-			reedShaper=audioCtx.createWaveShaper(); reedShaper.curve=createReedCurve(2048,2.3);
+			// Reed + bore
+			reedDrive=audioCtx.createGain(); reedDrive.gain.value=1.45;
+			reedShaper=audioCtx.createWaveShaper(); reedShaper.curve=createReedCurve(2048,2.25);
 			reedBias=audioCtx.createConstantSource(); reedBias.offset.value=0.02; reedBias.start();
 
-			notch=audioCtx.createBiquadFilter(); notch.type='notch'; notch.frequency.value=900; notch.Q.value=1.5;
-			formant1=audioCtx.createBiquadFilter(); formant1.type='bandpass'; formant1.frequency.value=560; formant1.Q.value=2.5;
-			formant2=audioCtx.createBiquadFilter(); formant2.type='bandpass'; formant2.frequency.value=1150; formant2.Q.value=1.6;
-			lowpass=audioCtx.createBiquadFilter(); lowpass.type='lowpass'; lowpass.frequency.value=2000; lowpass.Q.value=0.8;
-			filterSum=audioCtx.createGain(); filterSum.gain.value=0.95;
+			notch=audioCtx.createBiquadFilter(); notch.type='notch'; notch.frequency.value=880; notch.Q.value=1.6;
+			formant1=audioCtx.createBiquadFilter(); formant1.type='bandpass'; formant1.frequency.value=560; formant1.Q.value=2.4;
+			formant2=audioCtx.createBiquadFilter(); formant2.type='bandpass'; formant2.frequency.value=1150; formant2.Q.value=1.7;
+			lowpass=audioCtx.createBiquadFilter(); lowpass.type='lowpass'; lowpass.frequency.value=2100; lowpass.Q.value=0.85;
+			filterSum=audioCtx.createGain(); filterSum.gain.value=0.96;
 
 			toneBus.connect(reedDrive).connect(reedShaper).connect(notch);
 			reedBias.connect(reedShaper);
@@ -274,263 +294,315 @@
 			notch.connect(formant2).connect(filterSum);
 			notch.connect(lowpass).connect(filterSum);
 
-			filterSum.connect(activeGate);
+			// Dry -> comp -> out; sends to reverbs
+			filterSum.connect(masterGain).connect(finalComp).connect(audioCtx.destination);
+			masterGain.connect(roomSend);
+			masterGain.connect(hallSend);
 
-			noiseBuf=createNoiseBuffer(audioCtx,2.0);
+			// Breath
+			noiseBuf=createNoiseBuffer(audioCtx,3.0);
 			noiseSrc=audioCtx.createBufferSource(); noiseSrc.buffer=noiseBuf; noiseSrc.loop=true;
+
 			breathHP=audioCtx.createBiquadFilter(); breathHP.type='highpass'; breathHP.frequency.value=260;
 			breathBP=audioCtx.createBiquadFilter(); breathBP.type='bandpass'; breathBP.frequency.value=1500; breathBP.Q.value=1.0;
 			breathGain=audioCtx.createGain(); breathGain.gain.value=0.0;
-			noiseSrc.connect(breathHP).connect(breathBP).connect(breathGain).connect(activeGate);
+			noiseSrc.connect(breathHP).connect(breathBP).connect(breathGain).connect(masterGain);
 
-			vibLFO=audioCtx.createOscillator(); vibLFO.frequency.value=5.0;
+			// Vibrato
+			vibLFO=audioCtx.createOscillator(); vibLFO.frequency.value=5.1;
 			vibDepthA=audioCtx.createGain(); vibDepthA.gain.value=1.0;
 			vibDepthB=audioCtx.createGain(); vibDepthB.gain.value=1.6;
 			vibLFO.connect(vibDepthA); vibLFO.connect(vibDepthB); vibLFO.start();
 			[voiceA.tri.frequency, voiceA.sine.frequency, voiceA.saw.frequency].forEach(p=>vibDepthA.connect(p));
 			[voiceB.tri.frequency, voiceB.sine.frequency, voiceB.saw.frequency].forEach(p=>vibDepthB.connect(p));
 
-			[voiceA, voiceB].forEach((v, idx) => {
-				const f = idx===0 ? freqA : freqB;
-				v.tri.frequency.value=f; v.sine.frequency.value=f; v.saw.frequency.value=f;
-				v.tri.start(); v.sine.start(); v.saw.start();
-			});
+			[voiceA, voiceB].forEach((v,i)=>{ const f=i===0?freqA:freqB; v.tri.frequency.value=f; v.sine.frequency.value=f; v.saw.frequency.value=f; v.tri.start(); v.sine.start(); v.saw.start(); });
 			noiseSrc.start();
 
-			voiceA.balGain.gain.value=stringLocalX[0];
-			voiceB.balGain.gain.value=stringLocalX[1];
+			voiceA.bal.gain.value=stringLocalX[0]; voiceB.bal.gain.value=stringLocalX[1];
 
-			audioStarted = true;
+			audioStarted=true;
 		}
 
-		function loudnessForFreq(f){ const factor=Math.pow(440/Math.max(60,f),0.35); return clamp01(0.75+Math.min(1.35,factor)-1.0+0.65); }
-		function applyLoudnessComp(){
-			const t=audioCtx.currentTime;
-			voiceA.loudnessGain.gain.cancelScheduledValues(t); voiceB.loudnessGain.gain.cancelScheduledValues(t);
-			voiceA.loudnessGain.gain.setTargetAtTime(loudnessForFreq(freqA),t,0.03);
-			voiceB.loudnessGain.gain.setTargetAtTime(loudnessForFreq(freqB),t,0.03);
-		}
+		function loudnessForFreq(f){ const factor=Math.pow(440/Math.max(60,f),0.35); return clamp01(0.75 + Math.min(1.35,factor) - 1.0 + 0.65); }
+		function applyLoudnessComp(){ const t=audioCtx.currentTime; voiceA.loudness.gain.setTargetAtTime(loudnessForFreq(freqA), t, 0.03); voiceB.loudness.gain.setTargetAtTime(loudnessForFreq(freqB), t, 0.03); }
 
 		function applyHarmonicsAndProfiles(x){
 			currentHarm = clamp01(x);
-			const t = audioCtx.currentTime;
+			const t=audioCtx.currentTime;
 			const aIsHigh = freqA > freqB;
 
-			const low = { sine: lerp(0.60,0.42,currentHarm), tri: lerp(0.34,0.46,currentHarm), saw: lerp(0.02,0.06,currentHarm) };
-			const high= { sine: lerp(0.34,0.20,currentHarm), tri: lerp(0.52,0.62,currentHarm), saw: lerp(0.06,0.12,currentHarm) };
+			const low  = { sine: (0.62 + (0.46-0.62)*currentHarm), tri: (0.32 + (0.44-0.32)*currentHarm), saw: (0.02 + (0.06-0.02)*currentHarm) };
+			const high = { sine: (0.34 + (0.20-0.34)*currentHarm), tri: (0.52 + (0.62-0.52)*currentHarm), saw: (0.06 + (0.12-0.06)*currentHarm) };
 
-			const setMix=(v,m)=>{ v.sineMix.gain.cancelScheduledValues(t); v.sineMix.gain.setTargetAtTime(m.sine,t,0.05);
-				v.triMix.gain.cancelScheduledValues(t); v.triMix.gain.setTargetAtTime(m.tri,t,0.05);
-				v.sawMix.gain.cancelScheduledValues(t); v.sawMix.gain.setTargetAtTime(m.saw,t,0.05); };
-			if (aIsHigh){ setMix(voiceA,high); setMix(voiceB,low);} else { setMix(voiceA,low); setMix(voiceB,high); }
+			const setMix=(v,m)=>{ v.sineMix.gain.setTargetAtTime(m.sine,t,0.05); v.triMix.gain.setTargetAtTime(m.tri,t,0.05); v.sawMix.gain.setTargetAtTime(m.saw,t,0.05); };
+			if(aIsHigh){ setMix(voiceA, high); setMix(voiceB, low); } else { setMix(voiceA, low); setMix(voiceB, high); }
 
-			lowpass.frequency.cancelScheduledValues(t);
-			lowpass.frequency.setTargetAtTime(lerp(1400,5000,currentHarm),t,0.06);
-			formant2.Q.cancelScheduledValues(t);
-			formant2.Q.setTargetAtTime(lerp(1.4,2.2,currentHarm),t,0.06);
-			reedDrive.gain.cancelScheduledValues(t);
-			reedDrive.gain.setTargetAtTime(lerp(1.4,2.0,currentHarm),t,0.05);
-			reedBias.offset.cancelScheduledValues(t);
-			reedBias.offset.setTargetAtTime(lerp(0.015,0.05,currentHarm),t,0.05);
+			lowpass.frequency.setTargetAtTime(1400 + (5000-1400)*currentHarm, t, 0.06);
+			formant2.Q.setTargetAtTime(1.4 + (2.2-1.4)*currentHarm, t, 0.06);
+			reedDrive.gain.setTargetAtTime(1.35 + (2.0-1.35)*currentHarm, t, 0.05);
+			reedBias.offset.setTargetAtTime(0.015 + (0.05-0.015)*currentHarm, t, 0.05);
 		}
 
-		// Bow velocity -> volume curve (with adjustable minimum movement threshold)
-		function mapVelocityToVolume(v) {
-			if (v < MIN_BOW_VELOCITY) return 0.0; // below threshold = silence
-			const vAdj = (v - MIN_BOW_VELOCITY) / (1 - MIN_BOW_VELOCITY);
-			const vNorm = clamp01(vAdj);
-			const extra = 0.35 * (1 - Math.exp(-3.0 * vNorm)); // saturates quickly
-			return Math.min(0.9, 0.5 + extra); // floor at 0.5 once moving
+		function setStringFreqHz(i, f){
+			const t=audioCtx.currentTime;
+			if(i===0){ freqA=f; [voiceA.tri.frequency, voiceA.sine.frequency, voiceA.saw.frequency].forEach(p=>p.setTargetAtTime(freqA,t,0.02)); }
+			else     { freqB=f; [voiceB.tri.frequency, voiceB.sine.frequency, voiceB.saw.frequency].forEach(p=>p.setTargetAtTime(freqB,t,0.02)); }
+			applyLoudnessComp();
+		}
+		function setStringFrequency(i, y){
+			const yClamped = clamp01(y);
+			if (pitchLocked[i]) { pendingY[i]=yClamped; setArrowY(i, yClamped); return; }
+			const base = MIN_FREQ * Math.pow(2, OCTAVES * yClamped);
+			const f = i===0 ? base : base * FIFTH;
+			setStringFreqHz(i, f);
+			setArrowY(i, yClamped);
+		}
+		function setStringLocalVolume(i, lx){
+			stringLocalX[i]=clamp01(lx);
+			const t=audioCtx.currentTime; const g = i===0?voiceA.bal:voiceB.bal;
+			g.gain.setTargetAtTime(stringLocalX[i], t, 0.02);
+			updateStringMeters();
 		}
 
-		function setVolumeFromVelocity(){
-			const t = audioCtx?.currentTime ?? 0;
-			const vol = mapVelocityToVolume(rightVelocity);
-			if (masterGain){
-				masterGain.gain.cancelScheduledValues(t);
-				masterGain.gain.setTargetAtTime(vol,t,0.015);
-			}
-			breathGain?.gain?.setTargetAtTime?.(vol * 0.20, t, 0.02);
-			hudEl.textContent = `Vel: ${rightVelocity.toFixed(3)} | Vol: ${vol.toFixed(2)} | Harm: ${currentHarm.toFixed(2)}`;
-			volFillEl.style.height = `${Math.round(vol*100)}%`;
+		function isDecaying(i){ return decayingHeld[i] || decayingOpen[i]; }
+		function refreshStringGate(i){
+			const on = !stringMute[i] && (stringActiveCount[i]>0 || frozen[i] || bowEngaged || isDecaying(i));
+			const g = i===0 ? voiceA.gate : voiceB.gate;
+			g.gain.setTargetAtTime(on ? 1.0 : 0.0, audioCtx.currentTime, 0.015);
+		}
+		function refreshAllGates(){ refreshStringGate(0); refreshStringGate(1); }
+
+		function setActWhileBowing(vol){
+			const t=audioCtx.currentTime;
+			[voiceA.act.gain, voiceB.act.gain].forEach(g=>{
+				g.cancelScheduledValues(t);
+				g.setTargetAtTime(vol, t, 0.012);
+			});
 		}
 
-		function setStringFrequency(stringIndex,y){
-			const freq = MIN_FREQ*Math.pow(2,OCTAVES*clamp01(y));
+		function startHeldDecay(i){
+			const g = i===0 ? voiceA.act.gain : voiceB.act.gain;
 			const t = audioCtx.currentTime;
-			if (stringIndex===0){
-				freqA=freq; [voiceA.tri.frequency,voiceA.sine.frequency,voiceA.saw.frequency].forEach(p=>{ p.cancelScheduledValues(t); p.setTargetAtTime(freqA,t,0.02); });
-			}else{
-				freqB=freq; [voiceB.tri.frequency,voiceB.sine.frequency,voiceB.saw.frequency].forEach(p=>{ p.cancelScheduledValues(t); p.setTargetAtTime(freqB,t,0.02); });
-			}
-			applyLoudnessComp(); applyHarmonicsAndProfiles(currentHarm);
+			decayingHeld[i]=true;
+			if (decayTimerHeld[i]) clearTimeout(decayTimerHeld[i]);
+			g.cancelScheduledValues(t);
+			g.setValueAtTime(Math.max(0.0008, g.value), t);
+			g.exponentialRampToValueAtTime(0.0008, t + DECAY_HELD_S);
+			refreshStringGate(i);
+			decayTimerHeld[i] = setTimeout(()=>{ decayingHeld[i]=false; refreshStringGate(i); }, DECAY_HELD_S*1000 + 50);
 		}
-		function setStringLocalVolume(stringIndex,localX){
-			stringLocalX[stringIndex]=clamp01(localX);
-			const t=audioCtx.currentTime; const g = stringIndex===0?voiceA.balGain:voiceB.balGain;
-			g.gain.cancelScheduledValues(t); g.gain.setTargetAtTime(stringLocalX[stringIndex],t,0.02);
+		function startOpenDecay(i){
+			const g = i===0 ? voiceA.act.gain : voiceB.act.gain;
+		            const t = audioCtx.currentTime;
+			decayingOpen[i]=true;
+			if (decayTimerOpen[i]) clearTimeout(decayTimerOpen[i]);
+			pitchLocked[i]=true; // suppress passive moves; left press lifts it
+			g.cancelScheduledValues(t);
+			g.setValueAtTime(Math.max(0.0008, g.value), t);
+			g.exponentialRampToValueAtTime(0.0008, t + DECAY_OPEN_S);
+			refreshStringGate(i);
+			decayTimerOpen[i] = setTimeout(()=>{ decayingOpen[i]=false; refreshStringGate(i); }, DECAY_OPEN_S*1000 + 50);
 		}
+		function cancelDecay(i){
+			const g = i===0 ? voiceA.act.gain : voiceB.act.gain;
+			const t = audioCtx.currentTime;
+			decayingHeld[i]=false; decayingOpen[i]=false;
+			if (decayTimerHeld[i]){ clearTimeout(decayTimerHeld[i]); decayTimerHeld[i]=null; }
+			if (decayTimerOpen[i]){ clearTimeout(decayTimerOpen[i]); decayTimerOpen[i]=null; }
+			g.cancelScheduledValues(t);
+			if (!bowEngaged) g.setTargetAtTime(0.0, t, 0.01);
+			refreshStringGate(i);
+		}
+		function cancelAllDecays(){ cancelDecay(0); cancelDecay(1); }
 
-		function refreshStringGate(idx){
-			const gate = idx===0?voiceA.stringGate:voiceB.stringGate;
-			const shouldOpen = frozen[idx] || stringActiveCount[idx]>0;
-			const t=audioCtx.currentTime;
-			gate.gain.cancelScheduledValues(t); gate.gain.setTargetAtTime(shouldOpen?1.0:0.0,t,0.015);
-		}
-		function updateActiveGate(){
-			const any = (frozen[0]||stringActiveCount[0]>0)||(frozen[1]||stringActiveCount[1]>0);
-			const t=audioCtx.currentTime;
-			activeGate.gain.cancelScheduledValues(t); activeGate.gain.setTargetAtTime(any?1.0:0.0,t,0.015);
-		}
+		// Unlock
+		function maybeUnlock(){ if(unlockedAudio) return; ensureCtx(); audioCtx.resume().then(()=>{ setupAudio(); unlockedAudio=true; unlock.classList.add('hidden'); }).catch(()=>{ setupAudio(); unlockedAudio=true; unlock.classList.add('hidden'); }); }
+		unlock.addEventListener('pointerdown', e=>{ e.preventDefault(); maybeUnlock(); }, {passive:false});
+		unlockBtn.addEventListener('click', e=>{ e.preventDefault(); maybeUnlock(); });
 
-		// Unlock helpers
-		function maybeUnlock() {
-			if (unlocked) return;
-			try {
-				ensureCtx();
-				audioCtx.resume().then(() => {
-					setupAudio(); unlocked = true; unlock.classList.add('hidden');
-				}).catch(() => {
-					unlock.classList.add('hidden');
-					setupAudio(); unlocked = true;
-				});
-			} catch { unlock.classList.add('hidden'); }
-		}
-
-		// Left pad (rectangles, per-string vol X, pitch Y, double-tap freeze)
+		// Left pad
 		const leftPointerToString=new Map();
-		leftPad.addEventListener('pointerdown', (e)=>{
+		leftPad.addEventListener('pointerdown',(e)=>{
 			e.preventDefault(); maybeUnlock();
 			const now=performance.now();
-			const info=rectInfoFromClient(e); const s=info.s;
+			const p=getPadXY(leftPad, e.clientX, e.clientY);
+			const s = p.x < 0.5 ? 0 : 1;
 
-			if (now - lastTapTime[s] < DOUBLE_TAP_MS) {
+			// If open-string decay running, allow pitch change without cancelling
+			if (decayingOpen[s]) {
+				pitchLocked[s]=false;
+			} else {
+				cancelDecay(s);
+			}
+
+			if(now - lastTapTime[s] < DOUBLE_TAP_MS){
 				frozen[s]=!frozen[s];
-				if (frozen[s]) { setStringFrequency(s,info.y); setStringLocalVolume(s,info.localX); setLeftDotByLocal(s,info.localX,info.y); }
-				refreshStringGate(s); updateActiveGate(); lastTapTime[s]=0; return;
+				setArrowFrozen(s, frozen[s]);
+				if(frozen[s]){ setStringFrequency(s,p.y); setStringLocalVolume(s,localXForString(p.x, s)); }
+				else { resetArrowToBottom(s); }
+				refreshStringGate(s); lastTapTime[s]=0; return;
 			}
 			lastTapTime[s]=now;
 
 			leftPad.setPointerCapture(e.pointerId);
 			leftPointerToString.set(e.pointerId,s);
-			setStringFrequency(s,info.y);
-			setStringLocalVolume(s,info.localX);
-			setLeftDotByLocal(s,info.localX,info.y);
-			stringActiveCount[s]++; refreshStringGate(s); updateActiveGate();
+			setStringFrequency(s,p.y); setStringLocalVolume(s,localXForString(p.x, s));
+			stringActiveCount[s]++; refreshStringGate(s);
 		},{passive:false});
 		leftPad.addEventListener('pointermove',(e)=>{
-			if (!leftPointerToString.has(e.pointerId)) return;
+			if(!leftPointerToString.has(e.pointerId)) return;
+			// Ignore when leaving bounds (hold last)
+			const r = leftPad.getBoundingClientRect();
+			if (e.clientX < r.left || e.clientX > r.right || e.clientY < r.top || e.clientY > r.bottom) return;
+
 			e.preventDefault();
-			const info=rectInfoFromClient(e); const s=leftPointerToString.get(e.pointerId);
-			setStringFrequency(s,info.y);
-			setStringLocalVolume(s,info.localX);
-			setLeftDotByLocal(s,info.localX,info.y);
+			const s=leftPointerToString.get(e.pointerId);
+			const p=getPadXY(leftPad, e.clientX, e.clientY);
+			setStringFrequency(s,p.y);
+			setStringLocalVolume(s,localXForString(p.x, s));
 		},{passive:false});
 		leftPad.addEventListener('pointerup',(e)=>{
-			if (!leftPointerToString.has(e.pointerId)) return;
+			if(!leftPointerToString.has(e.pointerId)) return;
 			e.preventDefault();
 			const s=leftPointerToString.get(e.pointerId);
 			leftPointerToString.delete(e.pointerId);
 			stringActiveCount[s]=Math.max(0,stringActiveCount[s]-1);
-			refreshStringGate(s); updateActiveGate();
+
+			// Return to open-string pitch immediately
+			pitchLocked[s]=false; pendingY[s]=0;
+			setStringFreqHz(s, s===0?START_FREQ_A:START_FREQ_B);
+			if (!frozen[s]) resetArrowToBottom(s);
+
+			refreshStringGate(s);
 		},{passive:false});
 		leftPad.addEventListener('pointercancel',(e)=>{
-			if (!leftPointerToString.has(e.pointerId)) return;
+			if(!leftPointerToString.has(e.pointerId)) return;
 			const s=leftPointerToString.get(e.pointerId);
 			leftPointerToString.delete(e.pointerId);
 			stringActiveCount[s]=Math.max(0,stringActiveCount[s]-1);
-			refreshStringGate(s); updateActiveGate();
+
+			pitchLocked[s]=false; pendingY[s]=0;
+			setStringFreqHz(s, s===0?START_FREQ_A:START_FREQ_B);
+			if (!frozen[s]) resetArrowToBottom(s);
+
+			refreshStringGate(s);
 		},{passive:false});
 
-		// Right pad (velocity -> global volume; X -> harmonics)
-		let rightActivePointer=null;
+		// Mutes
+		function updateMute(i, val){ stringMute[i]=val; refreshStringGate(i); }
+		muteAEl.addEventListener('change', e=>updateMute(0, e.target.checked));
+		muteBEl.addEventListener('change', e=>updateMute(1, e.target.checked));
+
+		// Right pad (bow)
 		rightPad.addEventListener('pointerdown',(e)=>{
 			e.preventDefault(); maybeUnlock();
 			rightPad.setPointerCapture(e.pointerId); rightActivePointer=e.pointerId;
-			const p=getPadXY(rightPad,e.clientX,e.clientY);
+			const p=getPadXY(rightPad, e.clientX, e.clientY);
 			setRightDot(p.x,p.y);
-			lastRightTime=performance.now(); lastRightY=p.y; rightVelocity=0.0;
-			applyHarmonicsAndProfiles(p.x); setVolumeFromVelocity();
+			lastRightTime=performance.now(); lastRightY=p.y;
+
+			// Cancel all decays, unlock pitch
+			cancelAllDecays();
+			for(let i=0;i<2;i++){ if (pitchLocked[i]){ pitchLocked[i]=false; setStringFrequency(i, pendingY[i] ?? 0); } }
+
+			// Ensure open pitch for non-pressed/non-frozen
+			if (stringActiveCount[0]===0 && !frozen[0]) setStringFreqHz(0, START_FREQ_A);
+			if (stringActiveCount[1]===0 && !frozen[1]) setStringFreqHz(1, START_FREQ_B);
+
+			bowEngaged=true; refreshAllGates();
+			applyHarmonicsAndProfiles(p.x);
+			setActWhileBowing(mapSpeedToVolume(0));
+			updateBowOutputs();
 		},{passive:false});
 		rightPad.addEventListener('pointermove',(e)=>{
-			if (rightActivePointer!==e.pointerId) return;
+			if(rightActivePointer!==e.pointerId) return;
 			e.preventDefault();
-			const p=getPadXY(rightPad,e.clientX,e.clientY);
+			const p=getPadXY(rightPad, e.clientX, e.clientY);
 			setRightDot(p.x,p.y);
 			const now=performance.now();
 			const dt=Math.max(0.001,(now-lastRightTime)/1000);
-			const dv=Math.abs(p.y-lastRightY);
-			const instPerSec=dv/dt;
-			const normalized=clamp01(instPerSec/VELOCITY_NORM_MAX);
-			rightVelocity=0.65*rightVelocity+0.35*normalized;
+			const dy=p.y-lastRightY;
+			const instPerSec=Math.abs(dy)/dt;
+			bowSpeedNorm = clamp01(instPerSec / (1.0/0.5));
 			lastRightTime=now; lastRightY=p.y;
-			applyHarmonicsAndProfiles(p.x); setVolumeFromVelocity();
+
+			setActWhileBowing(mapSpeedToVolume(bowSpeedNorm));
+			applyHarmonicsAndProfiles(p.x);
+			updateBowOutputs();
 		},{passive:false});
 		rightPad.addEventListener('pointerup',(e)=>{
-			if (rightActivePointer!==e.pointerId) return;
+			if(rightActivePointer!==e.pointerId) return;
 			e.preventDefault();
-			rightActivePointer=null; rightVelocity=0.0; setVolumeFromVelocity();
+
+			const openA = !stringMute[0] && stringActiveCount[0]===0 && !frozen[0];
+			const openB = !stringMute[1] && stringActiveCount[1]===0 && !frozen[1];
+
+			rightActivePointer=null; bowEngaged=false; refreshAllGates();
+
+			if (!stringMute[0]){ if (openA) startOpenDecay(0); else startHeldDecay(0); }
+			if (!stringMute[1]){ if (openB) startOpenDecay(1); else startHeldDecay(1); }
+
+			updateBowOutputs();
 		},{passive:false});
 		rightPad.addEventListener('pointercancel',(e)=>{
-			if (rightActivePointer!==e.pointerId) return;
-			rightActivePointer=null; rightVelocity=0.0; setVolumeFromVelocity();
+			if(rightActivePointer!==e.pointerId) return;
+
+			const openA = !stringMute[0] && stringActiveCount[0]===0 && !frozen[0];
+			const openB = !stringMute[1] && stringActiveCount[1]===0 && !frozen[1];
+
+			rightActivePointer=null; bowEngaged=false; refreshAllGates();
+
+			if (!stringMute[0]){ if (openA) startOpenDecay(0); else startHeldDecay(0); }
+			if (!stringMute[1]){ if (openB) startOpenDecay(1); else startHeldDecay(1); }
+
+			updateBowOutputs();
 		},{passive:false});
 
-		// Passive velocity decay
-		let lastTick=performance.now();
-		function tick(now){
-			const dt=Math.max(0,(now-lastTick)/1000);
-			lastTick=now;
-			const decay=Math.log(2)/0.16;
-			rightVelocity=Math.max(0,rightVelocity*Math.exp(-decay*dt));
-			setVolumeFromVelocity();
-			requestAnimationFrame(tick);
+		// Idle check: force stop when bow held still
+		function monitorIdle(){
+			if (rightActivePointer!=null && bowEngaged){
+				const idleMs = performance.now() - (lastRightTime ?? 0);
+				if (idleMs > 80 && bowSpeedNorm > 0){
+					bowSpeedNorm = 0.0;
+					setActWhileBowing(0.0);
+					updateBowOutputs();
+				}
+			}
+			requestAnimationFrame(monitorIdle);
 		}
-		requestAnimationFrame(tick);
+		requestAnimationFrame(monitorIdle);
 
-		// Test tone
-		testToneBtn.addEventListener('click', (e)=>{
-			e.preventDefault(); maybeUnlock();
-			const osc=audioCtx.createOscillator(); osc.type='sine'; osc.frequency.value=440;
-			const g=audioCtx.createGain(); const t0=audioCtx.currentTime;
-			g.gain.setValueAtTime(0.0,t0);
-			g.gain.linearRampToValueAtTime(0.8,t0+0.02);
-			g.gain.setValueAtTime(0.8,t0+0.98);
-			g.gain.linearRampToValueAtTime(0.0,t0+1.0);
-			osc.connect(g).connect(audioCtx.destination);
-			osc.start(t0); osc.stop(t0+1.0);
-			osc.onended=()=>{ osc.disconnect(); g.disconnect(); };
-		});
+		function updateBowOutputs(){
+			const vol = mapSpeedToVolume(bowSpeedNorm);
 
-		// Overlay unlock
-		function onUnlockTap(e){ e.preventDefault(); maybeUnlock(); }
-		unlock.addEventListener('pointerdown', onUnlockTap, {passive:false});
-		unlockBtn.addEventListener('click', onUnlockTap);
-		unlockBtn.addEventListener('touchend', onUnlockTap, {passive:false});
+			// Breath only while bow is engaged
+			breathGain?.gain?.setTargetAtTime?.(bowEngaged ? vol*0.14 : 0.0, audioCtx.currentTime, 0.02);
 
-		// ---------------- Guides creation (left pad) ----------------
-		function buildGuides() {
-			leftGuides.innerHTML = '';
-			// Total semitone steps
-			const steps = Math.round(OCTAVES * 12);
-			for (let k = 0; k <= steps; k++) {
-				const y = k / steps; // linear in semitone space -> matches our pitch mapping
-				const line = document.createElement('div');
-				const isOct = (k % 12 === 0);
-				const isFifth = (k % 12 === 7);
-				line.className = 'guide-line ' + (isOct ? 'octave' : (isFifth ? 'fifth' : 'chrom'));
-				line.style.top = ((1 - y) * 100) + '%';
-				leftGuides.appendChild(line);
+			volFillEl.style.height = `${Math.round((bowEngaged?vol:0)*100)}%`;
+			bowHud.textContent = `${Math.round(bowSpeedNorm*100)} ${Math.round(vol*100)}`;
+		}
+
+		// Guides + defaults
+		function buildGuides(){
+			leftGuides.innerHTML='';
+			const steps=Math.round(3.0*12);
+			for(let k=0;k<=steps;k++){
+				const y=k/steps;
+				const div=document.createElement('div');
+				const isOct=(k%12===0), isFifth=(k%12===7);
+				div.className='guide-line '+(isOct?'octave':(isFifth?'fifth':'chrom'));
+				div.style.top=((1-y)*100)+'%';
+				leftGuides.appendChild(div);
 			}
 		}
-
-		// Init visuals
-		buildGuides();
-		setLeftDotByLocal(0,0.5,0.5);
-		setLeftDotByLocal(1,0.5,0.5);
-		setRightDot(0.5,0.5);
-		hudEl.textContent='Vel: 0.00 | Vol: 0.00 | Harm: 0.50';
-		volFillEl.style.height='0%';
+		function boot(){
+			buildGuides();
+			resetArrowToBottom(0);
+			resetArrowToBottom(1);
+			updateStringMeters();
+		}
+		window.addEventListener('load', boot);
 
 		// Prevent iOS gesture interference
 		document.addEventListener('gesturestart', e=>e.preventDefault());
