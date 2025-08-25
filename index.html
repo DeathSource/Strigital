@@ -26,17 +26,16 @@
 		.guide-line.fifth  { height:1.5px; background:var(--accent); opacity:0.95; }
 		.guide-line.chrom  { height:1px; background:#fff; opacity:0.28; }
 
-		.center-divider { position:absolute; top:0; bottom:0; left:50%; width:2px; background:#ffffff26; pointer-events:none; }
+		.center-divider { position:absolute; top:0; bottom:0; left:50%; width:2px; background:#ffffff26; pointer-events:none; z-index:4; }
 
-		.arrow { position:absolute; width:0; height:0; border-top:8px solid transparent; border-bottom:8px solid transparent; border-left:12px solid #fff; z-index:3; pointer-events:none; filter:drop-shadow(0 2px 2px rgba(0,0,0,0.6)); }
-		.arrow.frozen { border-left-color: var(--freeze); }
-		#arrowA { left:calc(50% - 10px); }
-		#arrowB { left:calc(100% - 10px); }
-
-		.string-meter { position:absolute; height:8px; background:rgba(255,255,255,0.10); border:1px solid rgba(255,255,255,0.18); border-radius:8px; overflow:hidden; z-index:3; }
-		#meterA { left:8px; width:calc(50% - 16px); top:8px; }
-		#meterB { left:calc(50% + 8px); width:calc(50% - 16px); top:8px; }
-		.string-fill { height:100%; width:0%; background:linear-gradient(90deg, #3aa0ff, #8bd3ff); }
+		.crosshair { position:absolute; pointer-events:none; z-index:3; opacity:0; transition:opacity 0.2s ease; }
+		.crosshair.active { opacity:1; }
+		.crosshair.frozen { opacity:1; }
+		.crosshair .horizontal { position:absolute; height:2px; background:#ff4444; box-shadow:0 0 4px rgba(255,68,68,0.5); }
+		.crosshair .vertical { position:absolute; width:2px; background:#ff4444; box-shadow:0 0 4px rgba(255,68,68,0.5); }
+		.crosshair.frozen .horizontal, .crosshair.frozen .vertical { background:var(--freeze); box-shadow:0 0 4px rgba(108,194,255,0.5); }
+		#crosshairA { left:0; width:50%; top:0; bottom:0; }
+		#crosshairB { left:50%; width:50%; top:0; bottom:0; }
 
 		.string-toggles { position:absolute; left:0; right:0; top:28px; display:flex; justify-content:space-between; gap:8px; padding:0 12px; z-index:3; }
 		.string-toggles label { display:flex; align-items:center; gap:10px; color:#fff; font-size:16px; background:rgba(255,255,255,0.10); padding:8px 12px; border-radius:12px; }
@@ -45,6 +44,17 @@
 		.vol-meter { position:absolute; right:8px; bottom:8px; top:8px; width:10px; background:rgba(255,255,255,0.06); border:1px solid rgba(255,255,255,0.15); border-radius:6px; overflow:hidden; }
 		.vol-fill  { position:absolute; left:0; right:0; bottom:0; height:0%; background:linear-gradient(180deg, #8bd3ff, #3aa0ff); }
 		#bowHud    { position:absolute; top:8px; left:50%; transform:translateX(-50%); font-variant-numeric:tabular-nums; font-size:16px; background:rgba(255,255,255,0.10); border:1px solid rgba(255,255,255,0.20); padding:4px 10px; border-radius:10px; pointer-events:none; opacity:0.95; }
+
+		.trail-container { position:absolute; inset:0; pointer-events:none; z-index:2; }
+		.trail-svg { position:absolute; inset:0; width:100%; height:100%; overflow:visible; }
+		.trail-path { 
+			fill:none; 
+			stroke:rgba(255,216,59,0.8); 
+			stroke-width:3; 
+			stroke-linecap:round; 
+			stroke-linejoin:round;
+			filter:drop-shadow(0 0 6px rgba(255,216,59,0.4));
+		}
 
 		.unlock { position:fixed; inset:0; display:flex; align-items:center; justify-content:center; background:rgba(0,0,0,0.7); backdrop-filter:blur(6px); z-index:9999; }
 		.unlock.hidden { display:none; }
@@ -61,19 +71,27 @@
 			<div class="guides" id="leftGuides"></div>
 			<div class="center-divider"></div>
 
-			<div id="meterA" class="string-meter"><div id="fillA" class="string-fill"></div></div>
-			<div id="meterB" class="string-meter"><div id="fillB" class="string-fill"></div></div>
+			<div class="crosshair" id="crosshairA">
+				<div class="horizontal"></div>
+				<div class="vertical"></div>
+			</div>
+			<div class="crosshair" id="crosshairB">
+				<div class="horizontal"></div>
+				<div class="vertical"></div>
+			</div>
 
 			<div class="string-toggles">
 				<label><input type="checkbox" id="muteA" /> off A</label>
 				<label><input type="checkbox" id="muteB" /> off B</label>
 			</div>
-
-			<div class="arrow" id="arrowA"></div>
-			<div class="arrow" id="arrowB"></div>
 		</div>
 
 		<div class="pad" id="padRight">
+			<div class="trail-container" id="trailContainer">
+				<svg class="trail-svg" id="trailSvg" viewBox="0 0 100 100" preserveAspectRatio="none">
+					<path class="trail-path" id="trailPath" d=""></path>
+				</svg>
+			</div>
 			<div id="bowHud">0 0</div>
 			<div class="vol-meter"><div class="vol-fill" id="volFill"></div></div>
 			<div class="indicator" id="rightDot" style="left:50%; top:50%;"></div>
@@ -87,7 +105,6 @@
 			<button class="cta" id="unlockBtn" type="button">Enter</button>
 		</div>
 	</div>
-
 	<script>
 		// Utils
 		function clamp01(v){ return Math.min(1, Math.max(0, v)); }
@@ -97,11 +114,34 @@
 			return { x:clamp01(px), y:1-clamp01(py) };
 		}
 		function setRightDot(x, y){ rightDot.style.left=(x*100)+'%'; rightDot.style.top=((1-y)*100)+'%'; }
-		function setArrowY(s, y){ (s===0?arrowA:arrowB).style.top = `calc(${(1 - y) * 100}% - 8px)`; }
-		function resetArrowToBottom(s){ setArrowY(s, 0); }
-		function setArrowFrozen(s, on){ (s===0?arrowA:arrowB).classList.toggle('frozen', !!on); }
+		function setCrosshair(s, x, y, active = true){ 
+			const crosshair = s===0 ? crosshairA : crosshairB;
+			const horizontal = crosshair.querySelector('.horizontal');
+			const vertical = crosshair.querySelector('.vertical');
+			
+			if (active) {
+				crosshair.classList.add('active');
+				// Ensure y is valid to prevent jump to middle
+				const safeY = clamp01(y);
+				horizontal.style.top = ((1-safeY)*100) + '%';
+				horizontal.style.left = '0';
+				horizontal.style.right = '0';
+				
+				// Calculate local X with safety checks
+				const safeX = clamp01(x);
+				const localX = s===0 ? clamp01(safeX*2) : clamp01((safeX-0.5)*2);
+				// Allow crosshair to reach edges for freeze detection
+				const constrainedX = Math.max(0, Math.min(100, localX*100));
+				vertical.style.left = constrainedX + '%';
+				vertical.style.top = '0';
+				vertical.style.bottom = '0';
+			} else {
+				crosshair.classList.remove('active');
+			}
+		}
+		function setCrosshairFrozen(s, on){ (s===0?crosshairA:crosshairB).classList.toggle('frozen', !!on); }
 
-		// DOM
+		// DOM elements
 		const leftPad = document.getElementById('padLeft');
 		const rightPad = document.getElementById('padRight');
 		const rightDot = document.getElementById('rightDot');
@@ -112,49 +152,23 @@
 		const bowHud = document.getElementById('bowHud');
 		const muteAEl = document.getElementById('muteA');
 		const muteBEl = document.getElementById('muteB');
-		const arrowA = document.getElementById('arrowA');
-		const arrowB = document.getElementById('arrowB');
-		const fillA = document.getElementById('fillA');
-		const fillB = document.getElementById('fillB');
+		const crosshairA = document.getElementById('crosshairA');
+		const crosshairB = document.getElementById('crosshairB');
 
-		function updateStringMeters(){
-			fillA.style.width = `${Math.round(stringLocalX[0]*100)}%`;
-			fillB.style.width = `${Math.round(stringLocalX[1]*100)}%`;
-		}
 		function localXForString(px, s){ return s===0 ? clamp01(px/0.5) : clamp01((px-0.5)/0.5); }
 
-		// Audio core + FX
+		// Audio variables
 		let audioCtx=null, unlockedAudio=false, audioStarted=false;
-
-		let masterGain=null, toneBus=null, currentHarm=0.5, finalComp=null;
+		let masterGain=null, currentHarm=0.5;
 
 		function makeVoice(){
-			return {
-				tri:null, sine:null, saw:null,
-				triMix:null, sineMix:null, sawMix:null,
-				pan:null, eq1:null, eq2:null, delay:null,
-				loudness:null, bal:null, gate:null, act:null
-			};
+			return { placeholder: null };
 		}
 		const voiceA = makeVoice();
 		const voiceB = makeVoice();
 
-		let reedDrive=null, reedShaper=null, reedBias=null;
-		let notch=null, formant1=null, formant2=null, lowpass=null, filterSum=null;
-
-		// Room + Hall reverbs
-		let roomSend=null, roomPre=null, roomConv=null, roomDamp=null, roomGain=null;
-		let hallSend=null, hallPre=null, hallConv=null, hallDamp=null, hallGain=null;
-
-		// Breath (soft noise layer following volume)
-		let noiseBuf=null, noiseSrc=null;
-		let breathHP=null, breathBP=null, breathGain=null;
-
-		// Vibrato
-		let vibLFO=null, vibDepthA=null, vibDepthB=null;
-
-		// Pitch and states
-		const MIN_FREQ=110, OCTAVES=3.0, FIFTH=Math.pow(2,7/12);
+		// Pitch and states - REDUCED GRID RANGE
+		const MIN_FREQ=165, OCTAVES=1.9, FIFTH=Math.pow(2,7/12);
 		const START_FREQ_A = MIN_FREQ;
 		const START_FREQ_B = MIN_FREQ*FIFTH;
 		let freqA=START_FREQ_A, freqB=START_FREQ_B;
@@ -177,8 +191,9 @@
 		let decayingOpen=[false,false];
 		let decayTimerHeld=[null,null];
 		let decayTimerOpen=[null,null];
+		let decayStartVolume=[1.0,1.0];
+		let decayStartTime=[0,0];
 
-		// Open decay: allow pitch change on left press (no cancellation)
 		let pitchLocked=[false,false];
 		let pendingY=[0,0];
 
@@ -191,237 +206,349 @@
 		}
 
 		function ensureCtx(){ if(!audioCtx) audioCtx = new (window.AudioContext||window.webkitAudioContext)(); }
-		function createNoiseBuffer(ctx, seconds=2){
-			const len=Math.floor(seconds*ctx.sampleRate), buf=ctx.createBuffer(1,len,ctx.sampleRate), d=buf.getChannelData(0);
-			for(let i=0;i<len;i++){ d[i] = Math.random()*2-1; }
-			return buf;
-		}
-		function createReedCurve(samples=2048, k=2.2){
-			const curve=new Float32Array(samples);
-			for(let i=0;i<samples;i++){ const x=(i/(samples-1))*2-1; curve[i]=Math.tanh(k*(x+0.02))*0.9; } return curve;
-		}
 
-		function initVoice(v, panValue, cfg){
-			v.tri=audioCtx.createOscillator(); v.tri.type='triangle';
-			v.sine=audioCtx.createOscillator(); v.sine.type='sine';
-			v.saw =audioCtx.createOscillator(); v.saw.type ='sawtooth';
-			v.triMix=audioCtx.createGain(); v.triMix.gain.value=cfg.tri;
-			v.sineMix=audioCtx.createGain(); v.sineMix.gain.value=cfg.sine;
-			v.sawMix =audioCtx.createGain(); v.sawMix.gain.value =cfg.saw;
-			v.pan=audioCtx.createStereoPanner(); v.pan.pan.value=panValue;
-			v.eq1=audioCtx.createBiquadFilter(); v.eq1.type=cfg.eq1Type; v.eq1.frequency.value=cfg.eq1Freq; v.eq1.gain.value=cfg.eq1Gain; v.eq1.Q.value=cfg.eq1Q ?? 0.7;
-			v.eq2=audioCtx.createBiquadFilter(); v.eq2.type=cfg.eq2Type; v.eq2.frequency.value=cfg.eq2Freq; v.eq2.gain.value=cfg.eq2Gain; v.eq2.Q.value=cfg.eq2Q ?? 0.7;
-			v.delay=audioCtx.createDelay(0.02); v.delay.delayTime.value=cfg.delay;
-			v.loudness=audioCtx.createGain(); v.loudness.gain.value=1.0;
-			v.bal=audioCtx.createGain();      v.bal.gain.value=0.5;
-			v.gate=audioCtx.createGain();     v.gate.gain.value=0.0;
-			v.act=audioCtx.createGain();      v.act.gain.value=0.0;
+		// Fluid Trail system
+		const trailPoints = [];
+		const MAX_TRAIL_POINTS = 30;
+		const TRAIL_FADE_TIME = 1500;
+		let trailPath = null;
+		let trailSvg = null;
 
-			v.tri.connect(v.triMix).connect(v.pan);
-			v.sine.connect(v.sineMix).connect(v.pan);
-			v.saw.connect(v.sawMix).connect(v.pan);
-			v.pan.connect(v.eq1).connect(v.eq2).connect(v.delay).connect(v.loudness).connect(v.bal).connect(v.gate).connect(v.act).connect(toneBus);
+		function initTrail() {
+			trailSvg = document.getElementById('trailSvg');
+			trailPath = document.getElementById('trailPath');
 		}
 
-		function makeIR(ctx, dur=1.0, decay=0.50, tilt=-0.02){
-			const len=Math.floor(dur*ctx.sampleRate), buf=ctx.createBuffer(2,len,ctx.sampleRate);
-			for(let ch=0; ch<2; ch++){
-				const d=buf.getChannelData(ch);
-				for(let i=0;i<len;i++){ const t=i/len; const env=Math.pow(1-t, decay*6); const col=1+tilt*(t-0.5); d[i]=(Math.random()*2-1)*env*col; }
+		function addTrailPoint(x, y) {
+			const now = performance.now();
+			const rightPadRect = rightPad.getBoundingClientRect();
+			
+			// Convert to SVG coordinates (percentage of container)
+			const svgX = x * 100;
+			const svgY = (1 - y) * 100;
+			
+			trailPoints.push({
+				x: svgX,
+				y: svgY,
+				timestamp: now
+			});
+
+			// Remove old points
+			while (trailPoints.length > MAX_TRAIL_POINTS) {
+				trailPoints.shift();
 			}
-			return buf;
+			
+			updateTrailPath();
+		}
+
+		function updateTrailPath() {
+			if (trailPoints.length < 2) {
+				trailPath.setAttribute('d', '');
+				return;
+			}
+
+			// Create smooth curve through points
+			let pathData = `M ${trailPoints[0].x} ${trailPoints[0].y}`;
+			
+			for (let i = 1; i < trailPoints.length; i++) {
+				const curr = trailPoints[i];
+				const prev = trailPoints[i - 1];
+				
+				if (i === 1) {
+					// First curve segment
+					pathData += ` Q ${prev.x} ${prev.y} ${(prev.x + curr.x) / 2} ${(prev.y + curr.y) / 2}`;
+				} else {
+					// Smooth curve to next point
+					pathData += ` T ${curr.x} ${curr.y}`;
+				}
+			}
+			
+			trailPath.setAttribute('d', pathData);
+		}
+
+		function updateTrail() {
+			const now = performance.now();
+			
+			// Remove old points
+			for (let i = trailPoints.length - 1; i >= 0; i--) {
+				const point = trailPoints[i];
+				const age = now - point.timestamp;
+				
+				if (age > TRAIL_FADE_TIME) {
+					trailPoints.splice(i, 1);
+				}
+			}
+			
+			// Update opacity based on age
+			if (trailPoints.length > 0) {
+				const oldest = Math.max(...trailPoints.map(p => now - p.timestamp));
+				const opacity = Math.max(0.2, 1 - (oldest / TRAIL_FADE_TIME));
+				trailPath.style.opacity = opacity;
+				updateTrailPath();
+			} else {
+				trailPath.setAttribute('d', '');
+			}
+			
+			requestAnimationFrame(updateTrail);
+		}
+
+		function clearTrail() {
+			trailPoints.length = 0;
+			trailPath.setAttribute('d', '');
+		}
+
+		// GLITCH-FREE DUDUK AUDIO SYSTEM
+		function initVoice(v, panValue, cfg){
+			v.fundamental = audioCtx.createOscillator();
+			v.fundamental.type = 'sine';
+			v.fundamental.frequency.value = 440;
+			
+			v.harmonic2 = audioCtx.createOscillator();
+			v.harmonic2.type = 'sine';
+			v.harmonic2.frequency.value = 880;
+			
+			v.harmonic3 = audioCtx.createOscillator();
+			v.harmonic3.type = 'sine';
+			v.harmonic3.frequency.value = 1320;
+			
+			v.fundGain = audioCtx.createGain();
+			v.harm2Gain = audioCtx.createGain();
+			v.harm3Gain = audioCtx.createGain();
+			
+			v.gain = audioCtx.createGain();
+			v.gain.gain.value = 0.0;
+			v.pan = audioCtx.createStereoPanner();
+			v.pan.pan.value = panValue;
+			
+			v.fundamental.connect(v.fundGain);
+			v.harmonic2.connect(v.harm2Gain);
+			v.harmonic3.connect(v.harm3Gain);
+			
+			[v.fundGain, v.harm2Gain, v.harm3Gain].forEach(g => g.connect(v.gain));
+			v.gain.connect(v.pan).connect(masterGain);
+			
+			v.fundamental.start();
+			v.harmonic2.start();
+			v.harmonic3.start();
 		}
 
 		function setupAudio(){
 			if(audioStarted) return;
 			ensureCtx();
 
-			masterGain = audioCtx.createGain(); masterGain.gain.value=1.0;
-			toneBus = audioCtx.createGain();
+			masterGain = audioCtx.createGain(); 
+			masterGain.gain.value = 0.7;
+			masterGain.connect(audioCtx.destination);
+			
+			initVoice(voiceA, -0.2, {});
+			initVoice(voiceB, +0.2, {});
 
-			// Final gentle compressor
-			finalComp = audioCtx.createDynamicsCompressor();
-			finalComp.threshold.value = -22;
-			finalComp.knee.value = 18;
-			finalComp.ratio.value = 2.2;
-			finalComp.attack.value = 0.005;
-			finalComp.release.value = 0.12;
-
-			// Room (short)
-			roomSend=audioCtx.createGain(); roomSend.gain.value=0.30;
-			roomPre =audioCtx.createDelay(0.2); roomPre.delayTime.value=0.018;
-			roomConv=audioCtx.createConvolver(); roomConv.buffer=makeIR(audioCtx, 1.0, 0.50, -0.02);
-			roomDamp=audioCtx.createBiquadFilter(); roomDamp.type='lowpass'; roomDamp.frequency.value=3800;
-			roomGain=audioCtx.createGain(); roomGain.gain.value=0.30;
-			roomSend.connect(roomPre).connect(roomConv).connect(roomDamp).connect(roomGain).connect(audioCtx.destination);
-
-			// Hall (general reverb)
-			hallSend=audioCtx.createGain(); hallSend.gain.value=0.14;
-			hallPre =audioCtx.createDelay(0.35); hallPre.delayTime.value=0.024;
-			hallConv=audioCtx.createConvolver(); hallConv.buffer=makeIR(audioCtx, 1.8, 0.60, -0.04);
-			hallDamp=audioCtx.createBiquadFilter(); hallDamp.type='lowpass'; hallDamp.frequency.value=3400;
-			hallGain=audioCtx.createGain(); hallGain.gain.value=0.18;
-			hallSend.connect(hallPre).connect(hallConv).connect(hallDamp).connect(hallGain).connect(audioCtx.destination);
-
-			// Voices
-			initVoice(voiceA, -0.9, {
-				tri:0.46, sine:0.50, saw:0.04,
-				eq1Type:'lowshelf', eq1Freq:220, eq1Gain:+3.0,
-				eq2Type:'lowpass',  eq2Freq:2300, eq2Gain:0.0,  eq2Q:0.7,
-				delay:0.000
-			});
-			initVoice(voiceB, +0.9, {
-				tri:0.56, sine:0.28, saw:0.10,
-				eq1Type:'highshelf', eq1Freq:2200, eq1Gain:+2.2,
-				eq2Type:'highpass',  eq2Freq:95,   eq2Gain:0.0,  eq2Q:0.9,
-				delay:0.004
-			});
-
-			// Reed + bore
-			reedDrive=audioCtx.createGain(); reedDrive.gain.value=1.45;
-			reedShaper=audioCtx.createWaveShaper(); reedShaper.curve=createReedCurve(2048,2.25);
-			reedBias=audioCtx.createConstantSource(); reedBias.offset.value=0.02; reedBias.start();
-
-			notch=audioCtx.createBiquadFilter(); notch.type='notch'; notch.frequency.value=880; notch.Q.value=1.6;
-			formant1=audioCtx.createBiquadFilter(); formant1.type='bandpass'; formant1.frequency.value=560; formant1.Q.value=2.4;
-			formant2=audioCtx.createBiquadFilter(); formant2.type='bandpass'; formant2.frequency.value=1150; formant2.Q.value=1.7;
-			lowpass=audioCtx.createBiquadFilter(); lowpass.type='lowpass'; lowpass.frequency.value=2100; lowpass.Q.value=0.85;
-			filterSum=audioCtx.createGain(); filterSum.gain.value=0.96;
-
-			toneBus.connect(reedDrive).connect(reedShaper).connect(notch);
-			reedBias.connect(reedShaper);
-			notch.connect(formant1).connect(filterSum);
-			notch.connect(formant2).connect(filterSum);
-			notch.connect(lowpass).connect(filterSum);
-
-			// Dry -> comp -> out; sends to reverbs
-			filterSum.connect(masterGain).connect(finalComp).connect(audioCtx.destination);
-			masterGain.connect(roomSend);
-			masterGain.connect(hallSend);
-
-			// Breath
-			noiseBuf=createNoiseBuffer(audioCtx,3.0);
-			noiseSrc=audioCtx.createBufferSource(); noiseSrc.buffer=noiseBuf; noiseSrc.loop=true;
-
-			breathHP=audioCtx.createBiquadFilter(); breathHP.type='highpass'; breathHP.frequency.value=260;
-			breathBP=audioCtx.createBiquadFilter(); breathBP.type='bandpass'; breathBP.frequency.value=1500; breathBP.Q.value=1.0;
-			breathGain=audioCtx.createGain(); breathGain.gain.value=0.0;
-			noiseSrc.connect(breathHP).connect(breathBP).connect(breathGain).connect(masterGain);
-
-			// Vibrato
-			vibLFO=audioCtx.createOscillator(); vibLFO.frequency.value=5.1;
-			vibDepthA=audioCtx.createGain(); vibDepthA.gain.value=1.0;
-			vibDepthB=audioCtx.createGain(); vibDepthB.gain.value=1.6;
-			vibLFO.connect(vibDepthA); vibLFO.connect(vibDepthB); vibLFO.start();
-			[voiceA.tri.frequency, voiceA.sine.frequency, voiceA.saw.frequency].forEach(p=>vibDepthA.connect(p));
-			[voiceB.tri.frequency, voiceB.sine.frequency, voiceB.saw.frequency].forEach(p=>vibDepthB.connect(p));
-
-			[voiceA, voiceB].forEach((v,i)=>{ const f=i===0?freqA:freqB; v.tri.frequency.value=f; v.sine.frequency.value=f; v.saw.frequency.value=f; v.tri.start(); v.sine.start(); v.saw.start(); });
-			noiseSrc.start();
-
-			voiceA.bal.gain.value=stringLocalX[0]; voiceB.bal.gain.value=stringLocalX[1];
-
-			audioStarted=true;
+			audioStarted = true;
 		}
-
-		function loudnessForFreq(f){ const factor=Math.pow(440/Math.max(60,f),0.35); return clamp01(0.75 + Math.min(1.35,factor) - 1.0 + 0.65); }
-		function applyLoudnessComp(){ const t=audioCtx.currentTime; voiceA.loudness.gain.setTargetAtTime(loudnessForFreq(freqA), t, 0.03); voiceB.loudness.gain.setTargetAtTime(loudnessForFreq(freqB), t, 0.03); }
 
 		function applyHarmonicsAndProfiles(x){
 			currentHarm = clamp01(x);
-			const t=audioCtx.currentTime;
-			const aIsHigh = freqA > freqB;
-
-			const low  = { sine: (0.62 + (0.46-0.62)*currentHarm), tri: (0.32 + (0.44-0.32)*currentHarm), saw: (0.02 + (0.06-0.02)*currentHarm) };
-			const high = { sine: (0.34 + (0.20-0.34)*currentHarm), tri: (0.52 + (0.62-0.52)*currentHarm), saw: (0.06 + (0.12-0.06)*currentHarm) };
-
-			const setMix=(v,m)=>{ v.sineMix.gain.setTargetAtTime(m.sine,t,0.05); v.triMix.gain.setTargetAtTime(m.tri,t,0.05); v.sawMix.gain.setTargetAtTime(m.saw,t,0.05); };
-			if(aIsHigh){ setMix(voiceA, high); setMix(voiceB, low); } else { setMix(voiceA, low); setMix(voiceB, high); }
-
-			lowpass.frequency.setTargetAtTime(1400 + (5000-1400)*currentHarm, t, 0.06);
-			formant2.Q.setTargetAtTime(1.4 + (2.2-1.4)*currentHarm, t, 0.06);
-			reedDrive.gain.setTargetAtTime(1.35 + (2.0-1.35)*currentHarm, t, 0.05);
-			reedBias.offset.setTargetAtTime(0.015 + (0.05-0.015)*currentHarm, t, 0.05);
+			const t = audioCtx.currentTime;
+			
+			let fundLevel, harm2Level, harm3Level;
+			if (currentHarm < 0.3) {
+				fundLevel = 1.0;
+				harm2Level = 0.45;
+				harm3Level = 0.25;
+			} else if (currentHarm < 0.7) {
+				fundLevel = 0.85;
+				harm2Level = 0.65;
+				harm3Level = 0.35;
+			} else {
+				fundLevel = 0.7;
+				harm2Level = 0.8;
+				harm3Level = 0.5;
+			}
+			
+			[voiceA, voiceB].forEach(voice => {
+				voice.fundGain.gain.setTargetAtTime(fundLevel * 0.3, t, 0.02);
+				voice.harm2Gain.gain.setTargetAtTime(harm2Level * 0.3, t, 0.02);
+				voice.harm3Gain.gain.setTargetAtTime(harm3Level * 0.3, t, 0.02);
+			});
 		}
 
 		function setStringFreqHz(i, f){
-			const t=audioCtx.currentTime;
-			if(i===0){ freqA=f; [voiceA.tri.frequency, voiceA.sine.frequency, voiceA.saw.frequency].forEach(p=>p.setTargetAtTime(freqA,t,0.02)); }
-			else     { freqB=f; [voiceB.tri.frequency, voiceB.sine.frequency, voiceB.saw.frequency].forEach(p=>p.setTargetAtTime(freqB,t,0.02)); }
-			applyLoudnessComp();
+			if(i===0){ freqA=f; } 
+			else { freqB=f; }
+			
+			const voice = i===0 ? voiceA : voiceB;
+			const t = audioCtx.currentTime;
+			
+			voice.fundamental.frequency.setTargetAtTime(f, t, 0.01);
+			voice.harmonic2.frequency.setTargetAtTime(f * 2, t, 0.01);
+			voice.harmonic3.frequency.setTargetAtTime(f * 3, t, 0.01);
 		}
+
 		function setStringFrequency(i, y){
 			const yClamped = clamp01(y);
-			if (pitchLocked[i]) { pendingY[i]=yClamped; setArrowY(i, yClamped); return; }
+			if (pitchLocked[i]) { pendingY[i]=yClamped; return; }
 			const base = MIN_FREQ * Math.pow(2, OCTAVES * yClamped);
 			const f = i===0 ? base : base * FIFTH;
 			setStringFreqHz(i, f);
-			setArrowY(i, yClamped);
 		}
+
 		function setStringLocalVolume(i, lx){
 			stringLocalX[i]=clamp01(lx);
-			const t=audioCtx.currentTime; const g = i===0?voiceA.bal:voiceB.bal;
-			g.gain.setTargetAtTime(stringLocalX[i], t, 0.02);
-			updateStringMeters();
+			// Don't immediately set volume - only when bow is engaged
 		}
 
 		function isDecaying(i){ return decayingHeld[i] || decayingOpen[i]; }
+		
+		function getCurrentDecayVolume(i) {
+			if (!isDecaying(i)) return 1.0;
+			
+			const now = audioCtx.currentTime;
+			const elapsed = now - decayStartTime[i];
+			const decayTime = decayingHeld[i] ? DECAY_HELD_S : DECAY_OPEN_S;
+			
+			if (elapsed >= decayTime) return 0.001;
+			
+			// Exponential decay formula: V(t) = V0 * e^(-t/τ)
+			const progress = elapsed / decayTime;
+			return decayStartVolume[i] * Math.pow(0.001, progress);
+		}
+		// Global decay volume (independent of string interactions)
+		let globalDecayVolume = [0.0, 0.0]; // Current decay volume for each string
+		let globalDecayActive = [false, false]; // Whether decay is active
+		
 		function refreshStringGate(i){
-			const on = !stringMute[i] && (stringActiveCount[i]>0 || frozen[i] || bowEngaged || isDecaying(i));
-			const g = i===0 ? voiceA.gate : voiceB.gate;
-			g.gain.setTargetAtTime(on ? 1.0 : 0.0, audioCtx.currentTime, 0.015);
+			const voice = i===0 ? voiceA : voiceB;
+			
+			let currentVol = 0.0;
+			if (!stringMute[i]) {
+				if (frozen[i]) {
+					// Frozen strings: use crosshair X as volume multiplier
+					currentVol = stringLocalX[i] * 0.5;
+				} else if (globalDecayActive[i]) {
+					// During decay: use global decay volume multiplied by crosshair X
+					currentVol = globalDecayVolume[i] * stringLocalX[i] * 0.5;
+				} else if (bowEngaged) {
+					// Bow engaged: use crosshair X as volume
+					currentVol = stringLocalX[i] * 0.5;
+				}
+				// No bow, no decay, no freeze = silence
+			}
+			
+			voice.gain.gain.setTargetAtTime(currentVol, audioCtx.currentTime, 0.015);
 		}
 		function refreshAllGates(){ refreshStringGate(0); refreshStringGate(1); }
 
 		function setActWhileBowing(vol){
-			const t=audioCtx.currentTime;
-			[voiceA.act.gain, voiceB.act.gain].forEach(g=>{
-				g.cancelScheduledValues(t);
-				g.setTargetAtTime(vol, t, 0.012);
-			});
+			// Stop any active decay when bow engages
+			globalDecayActive[0] = false;
+			globalDecayActive[1] = false;
+			
+			// Refresh gates to use bow volume
+			refreshAllGates();
+		}
+		
+		function startGlobalDecay(stringIndex) {
+			globalDecayActive[stringIndex] = true;
+			globalDecayVolume[stringIndex] = 1.0; // Start at full volume
+			
+			// Animate decay over time
+			const decayTime = 3000; // 3 seconds
+			const startTime = performance.now();
+			
+			function updateDecay() {
+				const elapsed = performance.now() - startTime;
+				const progress = elapsed / decayTime;
+				
+				if (progress >= 1.0) {
+					globalDecayActive[stringIndex] = false;
+					globalDecayVolume[stringIndex] = 0.0;
+				} else {
+					// Exponential decay
+					globalDecayVolume[stringIndex] = Math.pow(0.001, progress);
+				}
+				
+				refreshStringGate(stringIndex);
+				
+				if (globalDecayActive[stringIndex]) {
+					requestAnimationFrame(updateDecay);
+				}
+			}
+			
+			requestAnimationFrame(updateDecay);
 		}
 
 		function startHeldDecay(i){
-			const g = i===0 ? voiceA.act.gain : voiceB.act.gain;
+			const voice = i===0 ? voiceA : voiceB;
 			const t = audioCtx.currentTime;
 			decayingHeld[i]=true;
 			if (decayTimerHeld[i]) clearTimeout(decayTimerHeld[i]);
-			g.cancelScheduledValues(t);
-			g.setValueAtTime(Math.max(0.0008, g.value), t);
-			g.exponentialRampToValueAtTime(0.0008, t + DECAY_HELD_S);
-			refreshStringGate(i);
-			decayTimerHeld[i] = setTimeout(()=>{ decayingHeld[i]=false; refreshStringGate(i); }, DECAY_HELD_S*1000 + 50);
+			
+			// Record decay start parameters
+			decayStartVolume[i] = Math.max(0.001, voice.gain.gain.value / 0.5); // Normalize back to 0-1
+			decayStartTime[i] = t;
+			
+			voice.gain.gain.cancelScheduledValues(t);
+			voice.gain.gain.setValueAtTime(Math.max(0.001, voice.gain.gain.value), t);
+			voice.gain.gain.exponentialRampToValueAtTime(0.001, t + DECAY_HELD_S);
+			
+			decayTimerHeld[i] = setTimeout(()=>{ 
+				decayingHeld[i]=false; 
+				refreshStringGate(i); 
+			}, DECAY_HELD_S*1000 + 50);
 		}
+
 		function startOpenDecay(i){
-			const g = i===0 ? voiceA.act.gain : voiceB.act.gain;
-		            const t = audioCtx.currentTime;
+			const voice = i===0 ? voiceA : voiceB;
+			const t = audioCtx.currentTime;
 			decayingOpen[i]=true;
 			if (decayTimerOpen[i]) clearTimeout(decayTimerOpen[i]);
-			pitchLocked[i]=true; // suppress passive moves; left press lifts it
-			g.cancelScheduledValues(t);
-			g.setValueAtTime(Math.max(0.0008, g.value), t);
-			g.exponentialRampToValueAtTime(0.0008, t + DECAY_OPEN_S);
-			refreshStringGate(i);
-			decayTimerOpen[i] = setTimeout(()=>{ decayingOpen[i]=false; refreshStringGate(i); }, DECAY_OPEN_S*1000 + 50);
+			pitchLocked[i]=true;
+			
+			// Record decay start parameters
+			decayStartVolume[i] = Math.max(0.001, voice.gain.gain.value / 0.5); // Normalize back to 0-1
+			decayStartTime[i] = t;
+			
+			voice.gain.gain.cancelScheduledValues(t);
+			voice.gain.gain.setValueAtTime(Math.max(0.001, voice.gain.gain.value), t);
+			voice.gain.gain.exponentialRampToValueAtTime(0.001, t + DECAY_OPEN_S);
+			
+			decayTimerOpen[i] = setTimeout(()=>{ 
+				decayingOpen[i]=false; 
+				refreshStringGate(i); 
+			}, DECAY_OPEN_S*1000 + 50);
 		}
+
 		function cancelDecay(i){
-			const g = i===0 ? voiceA.act.gain : voiceB.act.gain;
+			const voice = i===0 ? voiceA : voiceB;
 			const t = audioCtx.currentTime;
 			decayingHeld[i]=false; decayingOpen[i]=false;
 			if (decayTimerHeld[i]){ clearTimeout(decayTimerHeld[i]); decayTimerHeld[i]=null; }
 			if (decayTimerOpen[i]){ clearTimeout(decayTimerOpen[i]); decayTimerOpen[i]=null; }
-			g.cancelScheduledValues(t);
-			if (!bowEngaged) g.setTargetAtTime(0.0, t, 0.01);
+			
+			voice.gain.gain.cancelScheduledValues(t);
+			if (!bowEngaged) voice.gain.gain.setTargetAtTime(0.0, t, 0.01);
 			refreshStringGate(i);
 		}
 		function cancelAllDecays(){ cancelDecay(0); cancelDecay(1); }
 
 		// Unlock
-		function maybeUnlock(){ if(unlockedAudio) return; ensureCtx(); audioCtx.resume().then(()=>{ setupAudio(); unlockedAudio=true; unlock.classList.add('hidden'); }).catch(()=>{ setupAudio(); unlockedAudio=true; unlock.classList.add('hidden'); }); }
+		function maybeUnlock(){ 
+			if(unlockedAudio) return; 
+			ensureCtx(); 
+			audioCtx.resume().then(()=>{ 
+				setupAudio(); 
+				unlockedAudio=true; 
+				unlock.classList.add('hidden'); 
+			}).catch(()=>{ 
+				setupAudio(); 
+				unlockedAudio=true; 
+				unlock.classList.add('hidden'); 
+			}); 
+		}
 		unlock.addEventListener('pointerdown', e=>{ e.preventDefault(); maybeUnlock(); }, {passive:false});
 		unlockBtn.addEventListener('click', e=>{ e.preventDefault(); maybeUnlock(); });
 
-		// Left pad
+		// Left pad interactions
 		const leftPointerToString=new Map();
 		leftPad.addEventListener('pointerdown',(e)=>{
 			e.preventDefault(); maybeUnlock();
@@ -429,39 +556,72 @@
 			const p=getPadXY(leftPad, e.clientX, e.clientY);
 			const s = p.x < 0.5 ? 0 : 1;
 
-			// If open-string decay running, allow pitch change without cancelling
-			if (decayingOpen[s]) {
-				pitchLocked[s]=false;
-			} else {
-				cancelDecay(s);
+			// Check for freeze/unfreeze at edges using local string coordinates
+			const localX = localXForString(p.x, s);
+			if (localX > 0.98) {
+				// Right extremity - freeze
+				frozen[s] = true;
+				setCrosshairFrozen(s, true);
+				setStringFrequency(s, p.y); 
+				setStringLocalVolume(s, localX); 
+				setCrosshair(s, p.x, p.y);
+				refreshStringGate(s);
+				return;
+			} else if (localX < 0.02) {
+				// Left extremity - unfreeze
+				frozen[s] = false;
+				setCrosshairFrozen(s, false);
+				const crosshair = s===0 ? crosshairA : crosshairB;
+				crosshair.classList.remove('active');
+				refreshStringGate(s);
+				return;
 			}
-
-			if(now - lastTapTime[s] < DOUBLE_TAP_MS){
-				frozen[s]=!frozen[s];
-				setArrowFrozen(s, frozen[s]);
-				if(frozen[s]){ setStringFrequency(s,p.y); setStringLocalVolume(s,localXForString(p.x, s)); }
-				else { resetArrowToBottom(s); }
-				refreshStringGate(s); lastTapTime[s]=0; return;
-			}
-			lastTapTime[s]=now;
 
 			leftPad.setPointerCapture(e.pointerId);
 			leftPointerToString.set(e.pointerId,s);
-			setStringFrequency(s,p.y); setStringLocalVolume(s,localXForString(p.x, s));
-			stringActiveCount[s]++; refreshStringGate(s);
+			
+			// ALWAYS update pitch and crosshair - independent of volume/decay
+			setStringFrequency(s,p.y); 
+			setStringLocalVolume(s,localXForString(p.x, s));
+			setCrosshair(s, p.x, p.y);
+			stringActiveCount[s]++; 
+			
+			// Volume is handled independently by global decay or bow state
+			refreshStringGate(s);
 		},{passive:false});
+
 		leftPad.addEventListener('pointermove',(e)=>{
 			if(!leftPointerToString.has(e.pointerId)) return;
-			// Ignore when leaving bounds (hold last)
 			const r = leftPad.getBoundingClientRect();
 			if (e.clientX < r.left || e.clientX > r.right || e.clientY < r.top || e.clientY > r.bottom) return;
 
 			e.preventDefault();
 			const s=leftPointerToString.get(e.pointerId);
 			const p=getPadXY(leftPad, e.clientX, e.clientY);
+			
+			// Check for freeze/unfreeze during move too
+			const localX = localXForString(p.x, s);
+			if (localX > 0.98 && !frozen[s]) {
+				// Right extremity - freeze during move
+				frozen[s] = true;
+				setCrosshairFrozen(s, true);
+			} else if (localX < 0.02 && frozen[s]) {
+				// Left extremity - unfreeze during move
+				frozen[s] = false;
+				setCrosshairFrozen(s, false);
+			}
+			
+			// Update frequency and volume regardless of freeze state
 			setStringFrequency(s,p.y);
 			setStringLocalVolume(s,localXForString(p.x, s));
+			setCrosshair(s, p.x, p.y);
+			
+			// If frozen, ensure it keeps playing at the crosshair level
+			if (frozen[s]) {
+				refreshStringGate(s);
+			}
 		},{passive:false});
+
 		leftPad.addEventListener('pointerup',(e)=>{
 			if(!leftPointerToString.has(e.pointerId)) return;
 			e.preventDefault();
@@ -469,13 +629,18 @@
 			leftPointerToString.delete(e.pointerId);
 			stringActiveCount[s]=Math.max(0,stringActiveCount[s]-1);
 
-			// Return to open-string pitch immediately
 			pitchLocked[s]=false; pendingY[s]=0;
-			setStringFreqHz(s, s===0?START_FREQ_A:START_FREQ_B);
-			if (!frozen[s]) resetArrowToBottom(s);
+			
+			// When crosshair is removed, string becomes 'open' (pitch = 0 as you described)
+			if (!frozen[s]) {
+				setStringFreqHz(s, s===0?START_FREQ_A:START_FREQ_B);
+				const crosshair = s===0 ? crosshairA : crosshairB;
+				crosshair.classList.remove('active');
+			}
 
 			refreshStringGate(s);
 		},{passive:false});
+
 		leftPad.addEventListener('pointercancel',(e)=>{
 			if(!leftPointerToString.has(e.pointerId)) return;
 			const s=leftPointerToString.get(e.pointerId);
@@ -484,7 +649,7 @@
 
 			pitchLocked[s]=false; pendingY[s]=0;
 			setStringFreqHz(s, s===0?START_FREQ_A:START_FREQ_B);
-			if (!frozen[s]) resetArrowToBottom(s);
+			if (!frozen[s]) setCrosshair(s, 0, 0, false);
 
 			refreshStringGate(s);
 		},{passive:false});
@@ -494,32 +659,45 @@
 		muteAEl.addEventListener('change', e=>updateMute(0, e.target.checked));
 		muteBEl.addEventListener('change', e=>updateMute(1, e.target.checked));
 
-		// Right pad (bow)
+		// Right pad interactions
 		rightPad.addEventListener('pointerdown',(e)=>{
 			e.preventDefault(); maybeUnlock();
 			rightPad.setPointerCapture(e.pointerId); rightActivePointer=e.pointerId;
 			const p=getPadXY(rightPad, e.clientX, e.clientY);
 			setRightDot(p.x,p.y);
+			addTrailPoint(p.x, p.y);
 			lastRightTime=performance.now(); lastRightY=p.y;
 
-			// Cancel all decays, unlock pitch
 			cancelAllDecays();
-			for(let i=0;i<2;i++){ if (pitchLocked[i]){ pitchLocked[i]=false; setStringFrequency(i, pendingY[i] ?? 0); } }
+			for(let i=0;i<2;i++){ 
+				if (pitchLocked[i]){ 
+					pitchLocked[i]=false; 
+					setStringFrequency(i, pendingY[i] ?? 0); 
+					if (pendingY[i] > 0) setCrosshair(i, 0.5, pendingY[i]);
+				}
+			}
 
-			// Ensure open pitch for non-pressed/non-frozen
-			if (stringActiveCount[0]===0 && !frozen[0]) setStringFreqHz(0, START_FREQ_A);
-			if (stringActiveCount[1]===0 && !frozen[1]) setStringFreqHz(1, START_FREQ_B);
+			if (stringActiveCount[0]===0 && !frozen[0]) {
+				setStringFreqHz(0, START_FREQ_A);
+				setCrosshair(0, 0, 0, false);
+			}
+			if (stringActiveCount[1]===0 && !frozen[1]) {
+				setStringFreqHz(1, START_FREQ_B);
+				setCrosshair(1, 0, 0, false);
+			}
 
 			bowEngaged=true; refreshAllGates();
 			applyHarmonicsAndProfiles(p.x);
 			setActWhileBowing(mapSpeedToVolume(0));
 			updateBowOutputs();
 		},{passive:false});
+
 		rightPad.addEventListener('pointermove',(e)=>{
 			if(rightActivePointer!==e.pointerId) return;
 			e.preventDefault();
 			const p=getPadXY(rightPad, e.clientX, e.clientY);
 			setRightDot(p.x,p.y);
+			addTrailPoint(p.x, p.y);
 			const now=performance.now();
 			const dt=Math.max(0.001,(now-lastRightTime)/1000);
 			const dy=p.y-lastRightY;
@@ -531,6 +709,7 @@
 			applyHarmonicsAndProfiles(p.x);
 			updateBowOutputs();
 		},{passive:false});
+
 		rightPad.addEventListener('pointerup',(e)=>{
 			if(rightActivePointer!==e.pointerId) return;
 			e.preventDefault();
@@ -538,28 +717,45 @@
 			const openA = !stringMute[0] && stringActiveCount[0]===0 && !frozen[0];
 			const openB = !stringMute[1] && stringActiveCount[1]===0 && !frozen[1];
 
-			rightActivePointer=null; bowEngaged=false; refreshAllGates();
+			rightActivePointer=null; bowEngaged=false; 
+			clearTrail();
 
-			if (!stringMute[0]){ if (openA) startOpenDecay(0); else startHeldDecay(0); }
-			if (!stringMute[1]){ if (openB) startOpenDecay(1); else startHeldDecay(1); }
+			// Start global decay for any active strings
+			if (!stringMute[0] && (stringActiveCount[0] > 0 || openA)) {
+				startGlobalDecay(0);
+			}
+			if (!stringMute[1] && (stringActiveCount[1] > 0 || openB)) {
+				startGlobalDecay(1);
+			}
+			
+			refreshAllGates();
 
 			updateBowOutputs();
 		},{passive:false});
+
 		rightPad.addEventListener('pointercancel',(e)=>{
 			if(rightActivePointer!==e.pointerId) return;
 
 			const openA = !stringMute[0] && stringActiveCount[0]===0 && !frozen[0];
 			const openB = !stringMute[1] && stringActiveCount[1]===0 && !frozen[1];
 
-			rightActivePointer=null; bowEngaged=false; refreshAllGates();
+			rightActivePointer=null; bowEngaged=false; 
+			clearTrail();
 
-			if (!stringMute[0]){ if (openA) startOpenDecay(0); else startHeldDecay(0); }
-			if (!stringMute[1]){ if (openB) startOpenDecay(1); else startHeldDecay(1); }
+			// Start global decay for any active strings
+			if (!stringMute[0] && (stringActiveCount[0] > 0 || openA)) {
+				startGlobalDecay(0);
+			}
+			if (!stringMute[1] && (stringActiveCount[1] > 0 || openB)) {
+				startGlobalDecay(1);
+			}
+			
+			refreshAllGates();
 
 			updateBowOutputs();
 		},{passive:false});
 
-		// Idle check: force stop when bow held still
+		// Idle monitoring and final setup
 		function monitorIdle(){
 			if (rightActivePointer!=null && bowEngaged){
 				const idleMs = performance.now() - (lastRightTime ?? 0);
@@ -575,18 +771,13 @@
 
 		function updateBowOutputs(){
 			const vol = mapSpeedToVolume(bowSpeedNorm);
-
-			// Breath only while bow is engaged
-			breathGain?.gain?.setTargetAtTime?.(bowEngaged ? vol*0.14 : 0.0, audioCtx.currentTime, 0.02);
-
 			volFillEl.style.height = `${Math.round((bowEngaged?vol:0)*100)}%`;
 			bowHud.textContent = `${Math.round(bowSpeedNorm*100)} ${Math.round(vol*100)}`;
 		}
 
-		// Guides + defaults
 		function buildGuides(){
 			leftGuides.innerHTML='';
-			const steps=Math.round(3.0*12);
+			const steps=Math.round(OCTAVES*12);
 			for(let k=0;k<=steps;k++){
 				const y=k/steps;
 				const div=document.createElement('div');
@@ -598,13 +789,11 @@
 		}
 		function boot(){
 			buildGuides();
-			resetArrowToBottom(0);
-			resetArrowToBottom(1);
-			updateStringMeters();
+			initTrail();
+			requestAnimationFrame(updateTrail);
 		}
 		window.addEventListener('load', boot);
 
-		// Prevent iOS gesture interference
 		document.addEventListener('gesturestart', e=>e.preventDefault());
 		document.addEventListener('gesturechange', e=>e.preventDefault());
 		document.addEventListener('gestureend', e=>e.preventDefault());
